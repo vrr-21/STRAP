@@ -10,11 +10,12 @@ from rllab.sampler.utils import rollout
 from inverse_rl.utils.hyperparametrized import Hyperparametrized
 
 
-class BatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
+class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
+    __metaclass__=Hyperparametrized
 
     def __init__(
             self,
@@ -137,6 +138,8 @@ class BatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
         self.shutdown_worker()
         if created_session:
             sess.close()
+        
+        
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

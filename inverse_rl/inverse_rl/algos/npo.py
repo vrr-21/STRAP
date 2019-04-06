@@ -121,6 +121,7 @@ class NPO(BatchPolopt):
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
         logger.log("Computing loss before")
+        
         loss_before = self.optimizer.loss(all_input_values)
         logger.log("Computing KL before")
         mean_kl_before = self.optimizer.constraint_val(all_input_values)

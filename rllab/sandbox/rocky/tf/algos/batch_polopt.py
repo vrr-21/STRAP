@@ -107,6 +107,7 @@ class BatchPolopt(RLAlgorithm):
         sess.run(tf.global_variables_initializer())
         self.start_worker()
         start_time = time.time()
+        losses = []
         for itr in range(self.start_itr, self.n_itr):
             itr_start_time = time.time()
             with logger.prefix('itr #%d | ' % itr):
@@ -117,7 +118,7 @@ class BatchPolopt(RLAlgorithm):
                 logger.log("Logging diagnostics...")
                 self.log_diagnostics(paths)
                 logger.log("Optimizing policy...")
-                self.optimize_policy(itr, samples_data)
+                losses = self.optimize_policy(itr, samples_data, losses)
                 logger.log("Saving snapshot...")
                 params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                 if self.store_paths:
@@ -135,6 +136,8 @@ class BatchPolopt(RLAlgorithm):
         self.shutdown_worker()
         if created_session:
             sess.close()
+
+        return losses
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

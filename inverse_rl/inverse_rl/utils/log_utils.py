@@ -64,6 +64,7 @@ def load_experts(fname, max_files=float('inf'), min_return=None):
         obses = path['observations']
         actions = path['actions']
         returns = path['returns']
+        # import IPython; IPython.embed();
         total_return = np.sum(returns)
         if (min_return is None) or (total_return >= min_return):
             traj = {'observations': obses, 'actions': actions}

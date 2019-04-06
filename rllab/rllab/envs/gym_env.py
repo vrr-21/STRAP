@@ -1,16 +1,22 @@
+import sys
+sys.path.append('../../')
+from parameters import IMG_SIZE, STACK_SIZE
+
 import gym
+import vizdoomgym
 import gym.wrappers
 import gym.envs
 import gym.spaces
 import traceback
 import logging
 
-try:
-    from gym.wrappers.monitoring import logger as monitor_logger
 
-    monitor_logger.setLevel(logging.WARNING)
-except Exception as e:
-    traceback.print_exc()
+# try:
+#     from gym.wrappers.monitoring import logger as monitor_logger
+
+#     monitor_logger.setLevel(logging.WARNING)
+# except Exception as e:
+#     traceback.print_exc()
 
 import os
 import os.path as osp
@@ -25,7 +31,7 @@ from rllab.misc import logger
 def convert_gym_space(space):
     # import IPython; IPython.embed()
     if isinstance(space, gym.spaces.Box):
-        return Box(low=0, high=255, shape =  (80,80))
+        return Box(low=0, high=255, shape = (IMG_SIZE, IMG_SIZE, STACK_SIZE))
     elif isinstance(space, gym.spaces.Discrete):
         return Discrete(n=space.n)
     elif isinstance(space, gym.spaces.Tuple):

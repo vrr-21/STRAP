@@ -38,7 +38,7 @@ class CategoricalConvPolicy(StochasticPolicy, LayersPowered, Serializable):
         # import pdb; pdb.set_trace()
         if prob_network is None:
             prob_network = ConvNetwork(
-                input_shape=env_spec.observation_space.shape,
+                input_shape=(env_spec.observation_space.shape),
                 output_dim=env_spec.action_space.n,
                 conv_filters=conv_filters,
                 conv_filter_sizes=conv_filter_sizes,
@@ -86,6 +86,7 @@ class CategoricalConvPolicy(StochasticPolicy, LayersPowered, Serializable):
         return action, dict(prob=prob)
 
     def get_actions(self, observations):
+        # import IPython; IPython.embed()
         flat_obs = self.observation_space.flatten_n(observations)
         probs = self._f_prob(flat_obs)
         actions = list(map(self.action_space.weighted_sample, probs))

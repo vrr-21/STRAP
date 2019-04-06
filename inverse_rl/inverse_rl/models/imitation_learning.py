@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from inverse_rl.models.architectures import feedforward_energy, relu_net
+from inverse_rl.models.architectures import feedforward_energy, relu_net, conv_net
 from inverse_rl.models.tf_util import discounted_reduce_sum
 from inverse_rl.utils.general import TrainingIterator
 from inverse_rl.utils.hyperparametrized import Hyperparametrized
@@ -12,7 +12,8 @@ LOG_REG = 1e-8
 DIST_GAUSSIAN = 'gaussian'
 DIST_CATEGORICAL = 'categorical'
 
-class ImitationLearning(object, metaclass=Hyperparametrized):
+class ImitationLearning(object):
+    __metaclass__=Hyperparametrized
     def __init__(self):
         pass
 
@@ -79,8 +80,12 @@ class ImitationLearning(object, metaclass=Hyperparametrized):
             return [np.concatenate([t[key] for t in paths]).astype(np.float32) for key in keys]
 
     @staticmethod
-    def sample_batch(*args, batch_size=32):
+    def sample_batch(*args, **kwargs):
         N = args[0].shape[0]
+        if 'batch_size' not in kwargs:
+            batch_size = 32
+        else:
+            batch_size = kwargs['batch_size']
         batch_idxs = np.random.randint(0, N, batch_size)  # trajectories are negatives
         return [data[batch_idxs] for data in args]
 
@@ -271,7 +276,7 @@ class AIRLStateAction(SingleTimestepIRL):
     This version consumes single timesteps. 
     """
     def __init__(self, env_spec, expert_trajs=None,
-                 discrim_arch=relu_net,
+                 discrim_arch=conv_net,
                  discrim_arch_args={},
                  l2_reg=0,
                  discount=1.0,
@@ -279,6 +284,8 @@ class AIRLStateAction(SingleTimestepIRL):
         super(AIRLStateAction, self).__init__()
         self.dO = env_spec.observation_space.flat_dim
         self.dU = env_spec.action_space.flat_dim
+        self.discriminator = discrim_arch
+
         self.set_demos(expert_trajs)
 
         # build energy model
@@ -290,10 +297,10 @@ class AIRLStateAction(SingleTimestepIRL):
             self.lprobs = tf.placeholder(tf.float32, [None, 1], name='log_probs')
             self.lr = tf.placeholder(tf.float32, (), name='lr')
 
-            obs_act = tf.concat([self.obs_t, self.act_t], axis=1)
+            # obs_act = tf.concat([self.obs_t, self.act_t], axis=1)
             with tf.variable_scope('discrim') as dvs:
                 with tf.variable_scope('energy'):
-                    self.energy = discrim_arch(obs_act, **discrim_arch_args)
+                    self.energy = discrim_arch(env_spec, self.obs_t, self.act_t)
                 # we do not learn a separate log Z(s) because it is impossible to separate from the energy
                 # In a discrete domain we can explicitly normalize to calculate log Z(s)
                 log_p_tau = -self.energy
@@ -313,7 +320,6 @@ class AIRLStateAction(SingleTimestepIRL):
             self.loss = cent_loss + reg_loss
             self.step = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
             self._make_param_ops(_vs)
-
 
     def fit(self, paths, policy=None, batch_size=32, max_itrs=100, logger=None, lr=1e-3,**kwargs):
         #self._compute_path_probs(paths, insert=True)
@@ -371,8 +377,8 @@ class AIRLStateAction(SingleTimestepIRL):
         """
         obs, acts = self.extract_paths(paths)
 
-        energy  = tf.get_default_session().run(self.energy,
-                                                    feed_dict={self.act_t: acts, self.obs_t: obs})
+        sess = tf.get_default_session()
+        energy  = sess.run(self.energy, feed_dict={self.act_t: acts, self.obs_t: obs})
         energy = -energy[:,0] 
         return self.unpack(energy, paths)
 

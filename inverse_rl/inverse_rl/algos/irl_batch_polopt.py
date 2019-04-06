@@ -13,11 +13,12 @@ from collections import deque
 from inverse_rl.utils.hyperparametrized import Hyperparametrized
 
 
-class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
+class IRLBatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
+    __metaclass__=Hyperparametrized
 
     def __init__(
             self,
@@ -136,7 +137,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
     def get_irl_params(self):
         return self.__irl_params
 
-    def compute_irl(self, paths, itr=0):
+    def compute_irl(self, paths, itr=0, losses=None):
         if self.no_reward:
             tot_rew = 0
             for path in paths:
@@ -153,6 +154,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
             mean_loss = self.irl_model.fit(paths, policy=self.policy, itr=itr, max_itrs=max_itrs, lr=lr,
                                            logger=logger)
 
+            losses.append(mean_loss)
             logger.record_tabular('IRLLoss', mean_loss)
             self.__irl_params = self.irl_model.get_params()
 
@@ -170,6 +172,9 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
         else:
             for i, path in enumerate(paths):
                 path['rewards'] += self.irl_model_wt * probs[i]
+        
+        if losses:
+            return paths, losses
         return paths
 
     def train(self):
@@ -182,6 +187,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
         self.start_worker()
         start_time = time.time()
 
+        losses = []
         returns = []
         for itr in range(self.start_itr, self.n_itr):
             itr_start_time = time.time()
@@ -190,7 +196,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
                 paths = self.obtain_samples(itr)
 
                 logger.log("Processing samples...")
-                paths = self.compute_irl(paths, itr=itr)
+                paths, losses = self.compute_irl(paths, itr=itr, losses=losses)
                 returns.append(self.log_avg_returns(paths))
                 samples_data = self.process_samples(itr, paths)
 
@@ -212,8 +218,9 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
                               "continue...")
+        
         self.shutdown_worker()
-        return 
+        return losses
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

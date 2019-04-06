@@ -31,12 +31,14 @@ class Hyperparametrized(type):
         return cls
 
 
-class HyperparamWrapper(object, metaclass=Hyperparametrized):
+class HyperparamWrapper(object):
+    __metaclass__=Hyperparametrized
     def __init__(self, **hyper_kwargs):
         pass
 
 if __name__ == "__main__":
-    class Algo1(object, metaclass=Hyperparametrized):
+    class Algo1(object):
+        __metaclass__=Hyperparametrized
         def __init__(self, hyper1=1.0, hyper2=2.0, model1=None):
             pass
 
@@ -46,7 +48,8 @@ if __name__ == "__main__":
             super(Algo2, self).__init__(**kwargs)
 
 
-    class Model1(object, metaclass=Hyperparametrized):
+    class Model1(object):
+        __metaclass__=Hyperparametrized
         def __init__(self, hyper1=None):
             pass
 

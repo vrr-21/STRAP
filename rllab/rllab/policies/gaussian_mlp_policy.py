@@ -126,7 +126,6 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered):
 
     @overrides
     def get_action(self, observation):
-        import IPython; IPython.embed()
         flat_obs = self.observation_space.flatten(observation)
         
         mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
@@ -135,7 +134,6 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered):
         return action, dict(mean=mean, log_std=log_std)
 
     def get_actions(self, observations):
-        import IPython; IPython.embed()
         flat_obs = self.observation_space.flatten_n(observations)
         means, log_stds = self._f_dist(flat_obs)
         rnd = np.random.normal(size=means.shape)

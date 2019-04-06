@@ -92,7 +92,7 @@ class NPO(BatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, itr, samples_data):
+    def optimize_policy(self, itr, samples_data, losses=None):
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -113,12 +113,15 @@ class NPO(BatchPolopt):
         mean_kl = self.optimizer.constraint_val(all_input_values)
         logger.log("Computing loss after")
         loss_after = self.optimizer.loss(all_input_values)
+        # assert loss_after != 0, "Train again!"
+        losses.append(loss_after)
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKLBefore', mean_kl_before)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
-        return dict()
+        # return dict()
+        return losses
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
