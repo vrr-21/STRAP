@@ -84,7 +84,7 @@ class ConvNet:
 
         # Conv Layers
         for i, kernel_size, filter_size, stride, use_batch_norm in zip(range(len(self.filters)), self.kernels, self.filters, self.strides, self.use_batch_norms):
-            with tf.variable_scope("conv" + str(i)):
+            with tf.variable_scope("conv" + str(i), reuse=tf.AUTO_REUSE):
                 net = self.conv2d(net, kernel_size, stride, filter_size)
                 if use_batch_norm:
                     net = self.norm(net)
@@ -94,7 +94,7 @@ class ConvNet:
         net = self.flatten(net)
         net = tf.concat([net, self.action], -1)
         for i, fc_hidden_size in enumerate(self.fc_hidden_sizes):
-            with tf.variable_scope("fc"+str(i)):
+            with tf.variable_scope("fc"+str(i), reuse=tf.AUTO_REUSE):
                 net = self.fc(net, fc_hidden_size)
                 net = tf.nn.relu(net)
         

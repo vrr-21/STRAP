@@ -14,7 +14,7 @@ from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
 
 ''' RLLab imports '''
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.envs.gym_env import GymEnv
 from rllab.envs.normalized_env import normalize
 
@@ -83,7 +83,7 @@ class IRL:
             entropy_weight = 0.1, # this should be 1.0 but 0.1 seems to work better
             zero_environment_reward = True,
             train_irl = False,
-            baseline = LinearFeatureBaseline(
+            baseline = ZeroBaseline(
                     env_spec = self._env.spec
                 )
         )
@@ -91,12 +91,12 @@ class IRL:
         model_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
         init_op = tf.initialize_all_variables()
 
-        with tf.Session() as sess:
-            saver = tf.train.Saver(model_vars)
-            saver.restore(sess, '/home/tejas/Workspace/STRAP/models/irl/model_'+self._env_name)
-            sess.run(tf.global_variables_initializer())
-            sess.run(tf.local_variables_initializer())
-            sess.run(tf.variables_initializer(model_vars))
+        self.tf_session = tf.Session()
+        saver = tf.train.Saver(model_vars)
+        saver.restore(self.tf_session, '/home/tejas/Workspace/STRAP/models/irl/model_'+self._env_name)
+        self.tf_session.run(tf.global_variables_initializer())
+        self.tf_session.run(tf.local_variables_initializer())
+        self.tf_session.run(tf.variables_initializer(model_vars))
 
         self.__reward_net = self._model.irl_model.discriminator
         print ('Model restored')
@@ -115,11 +115,10 @@ class IRL:
         reward = None
 
         reward_op = self.__reward_net(self._env.spec, observation, action_one_hot)
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            reward = sess.run(reward_op, feed_dict={self._model.irl_model.obs_t: observation, self._model.irl_model.act_t: action_one_hot})
+        self.tf_session.run(tf.global_variables_initializer())
+        reward = self.tf_session.run(reward_op, feed_dict={self._model.irl_model.obs_t: observation, self._model.irl_model.act_t: action_one_hot})
 
-        return reward
+        return -reward
 
 """
 --------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -157,7 +156,7 @@ def collect_data(env_name):
         discount=0.99,
         store_paths=True,
         start_itr=START_ITR,
-        baseline=LinearFeatureBaseline(env_spec=env.spec)
+        baseline=ZeroBaseline(env_spec=env.spec)
     )
     
     sess = tf.Session()
@@ -222,7 +221,7 @@ def train_AIRL(env_name):
         irl_model_wt=1.0,
         entropy_weight=0.1, # this should be 1.0 but 0.1 seems to work better
         zero_environment_reward=True,
-        baseline=LinearFeatureBaseline(env_spec=env.spec)
+        baseline=ZeroBaseline(env_spec=env.spec)
     )
 
     losses = None

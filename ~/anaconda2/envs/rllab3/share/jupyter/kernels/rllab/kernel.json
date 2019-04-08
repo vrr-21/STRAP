@@ -1,0 +1,11 @@
+{
+ "display_name": "RLLAB", 
+ "language": "python", 
+ "argv": [
+  "/usr/bin/python2", 
+  "-m", 
+  "ipykernel_launcher", 
+  "-f", 
+  "{connection_file}"
+ ]
+}
