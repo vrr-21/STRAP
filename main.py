@@ -1,6 +1,7 @@
 import sys
 sys.path.append('inverse_rl/')
 sys.path.append('rllab/')
+sys.path.append('inverse_rl/vizdoomgym')
 
 from utils import collect_data, train_AIRL, test_airl, InvalidArgumentError
 

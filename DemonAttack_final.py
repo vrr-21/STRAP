@@ -167,9 +167,9 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
 
     #Reset the environment
     obs = env.reset()
-    obs_small = downsample_image(obs)
+    obs_small = irl.downsample_image(obs, IMG_SIZE)
     #always state is most recent 4 frames
-    state = np.stack([obs_small]*4, axis =0)
+    state = np.stack([obs_small]*4, axis=2)
     assert(state.shape == (4, 80, 80))
     loss = None
         
@@ -190,10 +190,11 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
 
         #find the reward
         obs, reward_env, done,_ = env.step(action)
+        obs = irl.downsample_image(obs, IMG_SIZE)
         reward_irl = reward = irl.get_reward(state, action)
         # obs_small = downsample_image(obs)
 
-        next_state = np.append(state[:,:,:,1:], np.expand_dims(obs, 3), axis=3)
+        next_state = np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
         state  = next_state
 
 
@@ -229,7 +230,7 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
 
 def update_state(state, obs):
     # obs_small = downsample_image(obs)
-    return np.append(state[:,:,:,1:], np.expand_dims(obs, 3), axis=3)
+    return np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
 
 
 # In[11]:
@@ -273,25 +274,26 @@ if __name__ == '__main__':
     sess_dqn.run(tf.global_variables_initializer())
 
     obs = env.reset()
-    # obs_small = downsample_image(obs)
+    obs_small = irl.downsample_image(obs, IMG_SIZE)
 
-    state = np.stack([obs]*4, axis =3)
+    state = np.stack([obs_small]*4, axis=2)
 
     for i in range(MIN_EXPERIENCES):
         action = np.random.choice(K)
         
         reward_irl = reward = irl.get_reward(state, action)
         obs, reward_env, done,_ = env.step(action)
+        obs_small = irl.downsample_image(obs, IMG_SIZE)
         print('Experience: %d, Reward from IRL: %.3f, Reward from Env: %d' % (i, reward_irl, reward_env))
         env.render()
-        next_state = update_state(state, obs)
+        next_state = update_state(state, obs_small)
 
         experience_replay_buffer.append((state, action, reward, next_state, done))
 
         if done:
             obs = env.reset()
-            obs_small = downsample_image(obs)
-            state = np.stack([obs]*4, axis =3)
+            obs_small = irl.downsample_image(obs, IMG_SIZE)
+            state = np.stack([obs]*4, axis=2)
 
         else:
             state = next_state

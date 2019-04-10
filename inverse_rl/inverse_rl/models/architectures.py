@@ -24,7 +24,7 @@ def relu_net(x, layers=2, dout=1, d_hidden=32):
     return out
 
 class ConvNet:
-    def __init__(self, env_spec, kernels, filters, strides, use_batch_norms, fc_hidden_sizes, is_training= True):
+    def __init__(self, env_spec, kernels, filters, strides, use_batch_norms, fc_hidden_sizes, is_training=True):
         self.env_spec = env_spec
         self.kernels = kernels
         self.filters = filters
