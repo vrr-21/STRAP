@@ -16,7 +16,7 @@ if __name__ == "__main__":
     env = sys.argv[1]
     mode = sys.argv[2].lower()
     # env = "Assault"
-    # mode = "collect"
+    # mode = "irl"
 
     if mode == 'collect':
         collect_data(env)

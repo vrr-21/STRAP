@@ -63,12 +63,12 @@ def load_experts(fname, max_files=float('inf'), min_return=None):
     for path in paths:
         obses = path['observations']
         actions = path['actions']
-        returns = path['returns']
+        # returns = path['returns']
         # import IPython; IPython.embed();
-        total_return = np.sum(returns)
-        if (min_return is None) or (total_return >= min_return):
-            traj = {'observations': obses, 'actions': actions}
-            trajs.append(traj)
+        # total_return = np.sum(returns)
+        # if (min_return is None) or (total_return >= min_return):
+        traj = {'observations': obses, 'actions': actions}
+        trajs.append(traj)
     random.shuffle(trajs)
     print('Loaded %d trajectories' % len(trajs))
     return trajs

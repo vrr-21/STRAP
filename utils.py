@@ -4,10 +4,16 @@ Imports
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 """
 
-''' Importing modules from src/ folder '''
+''' Importing modules other folder '''
 import sys
 sys.path.append('inverse_rl/')
 sys.path.append('rllab/')
+sys.path.append('tensorpack_models/')
+
+''' Tensorpack Data Collect '''
+from tensorpack import OfflinePredictor, PredictConfig, get_model_loader
+from tensorpack_models.a3c_implementation.expert import get_player, Model
+from tensorpack_models.a3c_implementation.common import play_n_episodes
 
 ''' Sandbox imports '''
 from sandbox.rocky.tf.algos.trpo import TRPO
@@ -26,10 +32,11 @@ from inverse_rl.utils.log_utils import rllab_logdir, load_latest_experts
 from inverse_rl.algos.irl_trpo import IRLTRPO
 
 ''' Other imports '''
-from parameters import N_ITERATIONS
 import tensorflow as tf, gym, numpy as np, os, cv2
 from scipy.misc import imresize
-from parameters import IMG_SIZE, STACK_SIZE, START_ITR
+
+''' Constants '''
+from parameters import IMG_SIZE, STACK_SIZE, START_ITR, DATA_COLLECT_EPISODES, N_ITERATIONS
 
 """
 --------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -42,6 +49,7 @@ class InvalidArgumentError(Exception):
     pass
 
 class IRL:
+    """ STRAP Inverse Reinforcement Learning """
     def __init__(self, env, env_name):
         self._model = None
         self._env = env
@@ -49,6 +57,7 @@ class IRL:
         self.load_model()
 
     def downsample_image(self, A, IM_SIZE, down_only=False, gray=True):
+        """ Preprocess raw image """
         if down_only:
             obs = A
             obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
@@ -68,7 +77,8 @@ class IRL:
         obs = imresize(obs,size=(IMG_SIZE, IMG_SIZE), interp= 'nearest')
         return obs
     
-    def load_model(self):        
+    def load_model(self):
+        """ Load saved model into the IRL Tensorflow graph """ 
         tf.reset_default_graph()
 
         experts = load_latest_experts('data/'+self._env_name, n=3)
@@ -115,9 +125,11 @@ class IRL:
         print ('Model restored')
     
     def get_reward_network(self):
+        """ Get the reward function to extract reward given Observation and Action values """
         return self.__reward_net
 
     def get_reward(self, observation, action):
+        """ Pass Observation and Action, and get back reward from Reward Net """
         import numpy as np
         import tensorflow as tf
         
@@ -150,62 +162,20 @@ def __plot_results(losses, title=""):
     plt.show()
     
 def collect_data(env_name):
-    # tf.reset_default_graph()
-
-    env = TfEnv((GymEnv(env_name+'-v0', record_video=False, record_log=False)))
-    policy = CategoricalConvPolicy(
-        name='policy', 
-        env_spec=env.spec,
-        conv_filters=[32,64,64], 
-        conv_filter_sizes=[8, 4, 3], 
-        conv_strides=[4, 2, 1], 
-        conv_pads=['VALID']*3
-    )
-    algo = TRPO(
-        env=env,
-        policy=policy,
-        n_itr=N_ITERATIONS,
-        batch_size=200,
-        max_path_length=200,
-        discount=0.98,
-        store_paths=True,
-        start_itr=START_ITR,
-        baseline=ZeroBaseline(env_spec=env.spec)
-    )
+    """ Collect expert trajectories """
+    env = get_player(env_name=env_name+'-v0', train=False)
+    prediction_function = OfflinePredictor(PredictConfig(
+        model=Model(env.action_space.n),
+        session_init=get_model_loader("models/%s-v0.tfmodel" % env_name),
+        input_names=['state'],
+        output_names=['policy']
+    ))
+    play_n_episodes(env, prediction_function, DATA_COLLECT_EPISODES, render=True)
     
-    sess = tf.Session()
-    model_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-    sess.run(tf.global_variables_initializer())
-    sess.run(tf.local_variables_initializer())
-    sess.run(tf.variables_initializer(model_vars))
-    
-    saver = tf.train.Saver(model_vars)
-    if os.path.exists('models/expert/%s/' % env_name):
-        saver.restore(sess, '/home/tejas/Workspace/STRAP/models/expert/%s/model_%s' % (env_name, env_name))
-        print ('Loaded previously trained expert')
-            
-    losses = None
-    with rllab_logdir(algo=algo, dirname='data/'+env_name):
-        losses = algo.train()
-        if not os.path.isdir('models/expert/%s' % env_name):
-            os.mkdir('models/expert/%s' % env_name)
-        saver.save(sess, '/home/tejas/Workspace/STRAP/models/expert/%s/model_%s' % (env_name, env_name))
-
-    assert losses != None, "Please check implementation, loss not returned from training"
-    with open('data_collect_loss_' + env_name + '.csv', 'a+') as loss_file:
-        if START_ITR == 0:
-            loss_file.write('Iteration,Loss\n')
-
-        for itr, loss in enumerate(losses):
-            loss_file.write('%d,%f\n' % (START_ITR + itr, loss))
-            
-    print ('Losses saved')
-    sess.close()
-
-    __plot_results(losses, "Change in loss over %d iterations" % len(losses))
 
 
 def train_AIRL(env_name):
+    """ Train STRAP IRL Model """
     env = TfEnv(GymEnv(env_name+'-v0', record_video=False, record_log=False))
     
     experts = load_latest_experts('data/'+env_name, n=1)
@@ -260,6 +230,7 @@ def train_AIRL(env_name):
     __plot_results(losses, "Change in loss over %d iterations" % len(losses))
 
 def test_airl(env_name):
+    """ Just a test function which passes initial environment observation and random action to STRAP IRL and gets some reward back """
     tfenv = TfEnv(GymEnv(env_name + '-v0', record_video=False, record_log=False))
     irl = IRL(tfenv, env_name)
 
