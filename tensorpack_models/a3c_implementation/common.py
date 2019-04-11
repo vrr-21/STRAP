@@ -46,13 +46,13 @@ def play_one_episode(env, func, experience, render=False):
 
 def play_n_episodes(player, predfunc, nr, render=False):
     logger.info("Start Playing ... ")
-    experience = Experience(trajectory_length=TRAJECTORY_LENGTH, n_trajectories=N_TRAJECTORIES)
+    experience = Experience(num_actions=player.action_space.n, trajectory_length=TRAJECTORY_LENGTH, n_trajectories=N_TRAJECTORIES)
     for k in range(nr):
         if not experience.start_new_trajectory():
             experience.save("assault")
             return
         score = play_one_episode(player, predfunc, experience, render=render)
-        print("{}/{}, score={}".format(k, nr, score))
+        print("Episode {}/{}, score={}".format(k+1, nr, score))
         experience.save("itr_%d" % k)
 
 

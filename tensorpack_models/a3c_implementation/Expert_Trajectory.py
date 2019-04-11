@@ -3,25 +3,36 @@ class Experience(object):
     Store values in the form (observation, action, reward) for each state in trajectory for n_trajectories
     """
     
-    def __init__(self, trajectory_length = 10, n_trajectories = 5) -> None:
+    def __init__(self, num_actions, trajectory_length = 10, n_trajectories = 5):
         self.trajectory_length = trajectory_length
         self.n_trajectories = n_trajectories
         self.observations = []
         self.actions = []
         self.rewards = []
         self.__curr_trajectory = -1
+        self.num_actions = num_actions
     
-    def append(self, observation, action, reward) -> bool:
+    def downsample_image(self, image):
+        import cv2, numpy as np
+        from parameters import IMG_SIZE
+
+        image = image.transpose((3, 0, 1, 2))
+        new_image = []
+        for i in range(len(image)):
+            new_image.append(cv2.resize(cv2.cvtColor(image[i], cv2.COLOR_RGB2GRAY), (IMG_SIZE, IMG_SIZE)))
+
+        new_image = np.array(new_image, dtype=np.uint8)
+        return new_image.transpose((2, 0, 1))
+
+    def append(self, observation, action, reward):
         import cv2, numpy as np
         
-        observation = observation.transpose((3, 0, 1, 2))
-        new_observation = []
-        for i in range(len(observation)):
-            new_observation.append(cv2.cvtColor(observation[i], cv2.COLOR_RGB2GRAY))
-        new_observation = np.array(new_observation, dtype=np.uint8)
-        observation = new_observation.transpose((2, 0, 1))
-        self.observations.append(observation)
-        self.actions.append(action)
+        observation = self.downsample_image(observation)
+        self.observations.append(observation.reshape(-1))
+
+        action_one_hot = np.zeros(self.num_actions)
+        action_one_hot[action - 1] = 1
+        self.actions.append(action_one_hot)
         self.rewards.append(reward)
 
         if len(self.observations) == self.trajectory_length:
@@ -40,13 +51,17 @@ class Experience(object):
 
         return True
 
-    def save(self, prefix = '') -> None:
+    def save(self, env_name = 'Assault', file_name = 'itr'):
         import pickle, os
 
         assert len(self.observations) > 0, 'Please store expert trajectories before using this function'
 
         if not os.path.isdir('data'):
             os.mkdir('data')
+        if not os.path.isdir('data/expert'):
+            os.mkdir('data/expert')
+        if not os.path.isdir('data/expert/%s' % env_name):
+            os.mkdir('data/expert/%s' % env_name)
         
         expert_data = {
             'paths': [{
@@ -55,9 +70,10 @@ class Experience(object):
                 'rewards': self.rewards
             }]
         } 
-        pickle.dump(expert_data, open('data/Assault/%s.pkl' % prefix, 'wb'))
 
-    def fetch(self, prefix = '') -> dict:
+        pickle.dump(expert_data, open('data/Assault/%s.pkl' % file_name, 'wb+'))
+
+    def fetch(self, prefix = ''):
         import pickle, os
 
         assert os.path.isdir('data'), 'Please save an expert trajectory before using this function'

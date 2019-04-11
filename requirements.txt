@@ -49,3 +49,7 @@ nibabel==2.1.0
 pylru==1.0.9
 hyperopt
 polling
+tensorpack
+path.py
+pyprind
+cached_property

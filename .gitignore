@@ -104,7 +104,7 @@ ENV/
 
 # VS Code and model files
 .vscode/
-models/
+models/irl
 
 # CSV Files
 *.csv

@@ -164,13 +164,20 @@ def __plot_results(losses, title=""):
 def collect_data(env_name):
     """ Collect expert trajectories """
     env = get_player(env_name=env_name+'-v0', train=False)
+    to_render = True
+
+    try:
+        env.render()
+    except Exception:
+        to_render = False
+
     prediction_function = OfflinePredictor(PredictConfig(
         model=Model(env.action_space.n),
         session_init=get_model_loader("models/%s-v0.tfmodel" % env_name),
         input_names=['state'],
         output_names=['policy']
     ))
-    play_n_episodes(env, prediction_function, DATA_COLLECT_EPISODES, render=True)
+    play_n_episodes(env, prediction_function, DATA_COLLECT_EPISODES, render=to_render)
     
 
 
@@ -178,8 +185,8 @@ def train_AIRL(env_name):
     """ Train STRAP IRL Model """
     env = TfEnv(GymEnv(env_name+'-v0', record_video=False, record_log=False))
     
-    experts = load_latest_experts('data/'+env_name, n=1)
-
+    # AIRL Architecture
+    experts = load_latest_experts('data/'+env_name, n=5)
     irl_model = AIRLStateAction(
         env_spec=env.spec, 
         expert_trajs=experts
@@ -209,18 +216,34 @@ def train_AIRL(env_name):
         baseline=ZeroBaseline(env_spec=env.spec)
     )
 
+    # Restoring previously saved model, if any, from latest checkpoint
+    model_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    saver = tf.train.Saver(model_vars)
+    if not os.path.isdir('results'):
+        os.mkdir('results')
+    if not os.path.isdir('models'):
+        os.mkdir('models')
+    if not os.path.isdir('models/irl'):
+        os.mkdir('models/irl')
+    if os.path.isdir('models/irl/%s' % env_name):
+        with tf.Session() as sess:
+            saver.restore(sess, '/home/tejas/Workspace/STRAP/models/irl/%s/model_%s' % (env_name, env_name))
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
+            sess.run(tf.variables_initializer(model_vars))
+    else:
+        os.mkdir('models/irl/%s' % env_name)
+
+    # Training
     losses = None
-    saver = tf.train.Saver()
     with rllab_logdir(algo=algo, dirname='data/'+env_name+'_gcl'):
         with tf.Session() as sess:
             losses = algo.train()
-
-            if not os.path.isdir('models/irl/%s' % env_name):
-                os.mkdir('models/irl/%s' % env_name)
             saver.save(sess, '/home/tejas/Workspace/STRAP/models/irl/%s/model_%s' % (env_name, env_name))
     
-    assert losses != None, "Please check implementation, loss not returned from training"
-    with open('irl_loss_' + env_name + '.csv', 'a+') as loss_file:
+    # Writing losses to file
+    assert losses != None, "BUG: Please check implementation, loss not returned from training"
+    with open('results/irl_loss_' + env_name + '.csv', 'a+') as loss_file:
         if START_ITR == 0:
             loss_file.write('Iteration,Loss\n')
         

@@ -18,7 +18,7 @@ from tensorpack import *
 from .atari_wrapper import FireResetEnv, FrameStack, LimitLength, MapState
 from .common import Evaluator, eval_model_multithread, play_n_episodes
 from .simulator import SimulatorMaster, SimulatorProcess, TransitionExperience
-from parameters import STACK_SIZE, IMG_SIZE
+from parameters import STACK_SIZE
 
 if six.PY3:
     from concurrent import futures
@@ -26,7 +26,7 @@ if six.PY3:
 else:
     CancelledError = Exception
 
-IMAGE_SIZE = (IMG_SIZE, IMG_SIZE)
+IMAGE_SIZE = (84, 84)
 GAMMA = 0.99
 STATE_SHAPE = IMAGE_SIZE + (3, )
 
@@ -130,7 +130,7 @@ class A3CExpert:
         self.num_actions = get_player(env_name=self.env_name).action_space.n
         self.prediction_function = OfflinePredictor(PredictConfig(
             model=Model(self.num_actions),
-            session_init=get_model_loader("Assault-v0.tfmodel"),
+            session_init=get_model_loader("%s.tfmodel" % env_name),
             input_names=['state'],
             output_names=['policy']))
         self.env = get_player(train=False, env_name=self.env_name)
@@ -142,7 +142,3 @@ class A3CExpert:
     def get_action_probs(self, observation):
         observation = np.expand_dims(observation, 0)
         return self.prediction_function(observation)[0][0]
-
-# def collect():
-#     model = A3CExpert('Assault-v0')
-#     play_n_episodes(get_player(train=False), model.prediction_function, 1, render=True)
