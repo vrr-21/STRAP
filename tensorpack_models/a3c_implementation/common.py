@@ -53,7 +53,7 @@ def play_n_episodes(player, predfunc, nr, render=False):
             return
         score = play_one_episode(player, predfunc, experience, render=render)
         print("Episode {}/{}, score={}".format(k+1, nr, score))
-        experience.save("itr_%d" % k)
+        experience.save(env_name="Assault",file_name="itr_%d" % k)
 
 
 def eval_with_funcs(predictors, nr_eval, get_player_fn, verbose=False):

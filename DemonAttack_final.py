@@ -256,6 +256,12 @@ if __name__ == '__main__':
 
     #Make the environment
     env = gym.envs.make("Assault-v0")
+    to_render = True
+
+    try:
+        env.render()
+    except:
+        to_render = False
     #env = wrappers.Monitor(env, '../neural_reinforcement_agents')
 
     #Creat models
@@ -285,7 +291,8 @@ if __name__ == '__main__':
         obs, reward_env, done,_ = env.step(action)
         obs_small = irl.downsample_image(obs, IMG_SIZE)
         print('Experience: %d, Reward from IRL: %.3f, Reward from Env: %d' % (i, reward_irl, reward_env))
-        env.render()
+        if to_render:
+            env.render()
         next_state = update_state(state, obs_small)
 
         experience_replay_buffer.append((state, action, reward, next_state, done))

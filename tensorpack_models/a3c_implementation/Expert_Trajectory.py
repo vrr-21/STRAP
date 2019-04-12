@@ -58,10 +58,8 @@ class Experience(object):
 
         if not os.path.isdir('data'):
             os.mkdir('data')
-        if not os.path.isdir('data/expert'):
-            os.mkdir('data/expert')
-        if not os.path.isdir('data/expert/%s' % env_name):
-            os.mkdir('data/expert/%s' % env_name)
+        if not os.path.isdir('data/%s' % env_name):
+            os.mkdir('data/%s' % env_name)
         
         expert_data = {
             'paths': [{
@@ -71,7 +69,7 @@ class Experience(object):
             }]
         } 
 
-        pickle.dump(expert_data, open('data/Assault/%s.pkl' % file_name, 'wb+'))
+        pickle.dump(expert_data, open('data/%s/%s.pkl' % (env_name, file_name), 'wb+'))
 
     def fetch(self, prefix = ''):
         import pickle, os
