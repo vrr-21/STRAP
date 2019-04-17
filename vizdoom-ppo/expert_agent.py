@@ -15,7 +15,7 @@ env = gym.make('VizdoomTakeCover-v0')
 
 env = DummyVecEnv([lambda: env])
 
-model = PPO2.load("models/ppo_vizdoom_takecover")
+model = PPO2.load("models/ppo_vizdoom_takecover-colab")
 
 experience = Experience(num_actions = env.action_space.n, trajectory_length= TRAJECTORY_LENGTH, n_trajectories= N_TRAJECTORIES)
 
@@ -31,14 +31,14 @@ while current_ep <= num_eps:
     episode_rewards[-1] += rewards[0]
     if not experience.append(obs_cache, action, rewards[0]):
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizDoomTakeCover', file_name='itr'+str(current_ep - 1))
+        experience.save(env_name = 'VizDoomTakeCoverColab', file_name='itr'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
         continue
     if dones[0]:
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizDoomTakeCover', file_name='itr'+str(current_ep - 1))
+        experience.save(env_name = 'VizDoomTakeCoverColab', file_name='itr'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
