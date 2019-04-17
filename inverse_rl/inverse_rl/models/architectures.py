@@ -24,7 +24,7 @@ def relu_net(x, layers=2, dout=1, d_hidden=32):
     return out
 
 class ConvNet:
-    def __init__(self, env_spec, kernels, filters, strides, use_batch_norms, fc_hidden_sizes, is_training=True):
+    def __init__(self, env_spec, kernels, filters, strides, paddings, use_batch_norms, fc_hidden_sizes, is_training=True):
         self.env_spec = env_spec
         self.kernels = kernels
         self.filters = filters
@@ -32,6 +32,7 @@ class ConvNet:
         self.use_batch_norms = use_batch_norms
         self.fc_hidden_sizes = fc_hidden_sizes
         self.is_training = is_training
+        self.paddings = paddings
 
     def unflatten(self, input):
         import sys
@@ -40,7 +41,7 @@ class ConvNet:
 
         return tf.reshape(input, [-1, IMG_SIZE, IMG_SIZE, STACK_SIZE])
 
-    def conv2d(self, input, kernel_size, stride, num_filter):
+    def conv2d(self, input, kernel_size, stride, num_filter, padding='SAME'):
         stride_shape = [1, stride, stride, 1]
         filter_shape = [kernel_size, kernel_size, input.shape[3] if len(input.shape) > 3 else 1, num_filter]
 
@@ -75,7 +76,7 @@ class ConvNet:
         """
         return tf.layers.batch_normalization(input, training=self.is_training)
 
-    def get_energy(self, observation, action,):
+    def get_energy(self, observation, action):
         self.observation = observation
         self.action = action
         
@@ -83,9 +84,9 @@ class ConvNet:
         net = self.unflatten(self.observation)
 
         # Conv Layers
-        for i, kernel_size, filter_size, stride, use_batch_norm in zip(range(len(self.filters)), self.kernels, self.filters, self.strides, self.use_batch_norms):
+        for i, kernel_size, filter_size, stride, padding, use_batch_norm in zip(range(len(self.filters)), self.kernels, self.filters, self.strides, self.paddings, self.use_batch_norms):
             with tf.variable_scope("conv" + str(i), reuse=tf.AUTO_REUSE):
-                net = self.conv2d(net, kernel_size, stride, filter_size)
+                net = self.conv2d(net, kernel_size, stride, filter_size, padding)
                 if use_batch_norm:
                     net = self.norm(net)
                 net = tf.nn.relu(net)
@@ -99,7 +100,8 @@ class ConvNet:
                 net = tf.nn.relu(net)
         
         # Output Layer
-        self.out = self.fc(net, 1)
+        with tf.variable_scope("fc"+str(len(self.fc_hidden_sizes)), reuse=tf.AUTO_REUSE):
+            self.out = self.fc(net, 1)
 
         return self.out
         
@@ -109,20 +111,29 @@ def conv_net(
         observation, 
         action,
         conv_filters=[32, 64, 64], 
-        kernels=[3] * 3, 
+        kernels=[3, 3, 3], 
         conv_strides=[2, 1, 2], 
         conv_pads=['SAME']* 3,
         hidden_sizes=[64],
         use_batch_norms=[True, True, False]
     ):
     
+    # discrim_net = ConvNet(
+    #     env_spec, 
+    #     kernels=kernels, 
+    #     filters=conv_filters, 
+    #     strides=conv_strides, 
+    #     use_batch_norms=use_batch_norms, 
+    #     fc_hidden_sizes=hidden_sizes
+    # )
     discrim_net = ConvNet(
         env_spec, 
-        kernels=kernels, 
-        filters=conv_filters, 
-        strides=conv_strides, 
+        kernels=[8, 4, 3], 
+        filters=[32, 64, 64], 
+        strides=[4, 2, 1], 
         use_batch_norms=use_batch_norms, 
-        fc_hidden_sizes=hidden_sizes
+        paddings=['VALID']* 3,
+        fc_hidden_sizes=[512]
     )
 
     # f_theta = tensor_utils.compile_function(

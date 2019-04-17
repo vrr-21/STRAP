@@ -79,17 +79,30 @@ class IRL:
     
     def load_model(self):
         """ Load saved model into the IRL Tensorflow graph """ 
+
+        """
+        TODO: Check TF Graph
+        """
+
         tf.reset_default_graph()
 
-        experts = load_latest_experts('data/'+self._env_name, n=3)
+        experts = load_latest_experts('data/'+self._env_name, n=10)
         irl_model = AIRLStateAction(env_spec = self._env.spec, expert_trajs = experts)
+        # policy = CategoricalConvPolicy(
+        #     name='policy', 
+        #     env_spec=self._env.spec,
+        #     conv_filters=[32, 64, 64], 
+        #     conv_filter_sizes=[3] * 3, 
+        #     conv_strides=[2, 1, 2], 
+        #     conv_pads=['SAME'] * 3
+        # )
         policy = CategoricalConvPolicy(
             name='policy', 
             env_spec=self._env.spec,
             conv_filters=[32, 64, 64], 
-            conv_filter_sizes=[3] * 3, 
-            conv_strides=[2, 1, 2], 
-            conv_pads=['SAME'] * 3
+            conv_filter_sizes=[8, 4, 3], 
+            conv_strides=[4, 2, 1], 
+            conv_pads=['VALID'] * 3
         )
 
         self._model = IRLTRPO(
@@ -97,8 +110,8 @@ class IRL:
             policy = policy,
             irl_model = irl_model,
             n_itr = N_ITERATIONS,
-            batch_size = 200,
-            max_path_length = 200,
+            batch_size = 50,
+            max_path_length = 500,
             discount = 0.98,
             store_paths = True,
             discrim_train_itrs = 1,
@@ -110,19 +123,20 @@ class IRL:
                     env_spec = self._env.spec
                 )
         )
+
+        self.reward_sess = tf.InteractiveSession()
+        saver = tf.train.import_meta_graph('models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
+        saver.restore(self.reward_sess, tf.train.latest_checkpoint('models/irl/%s/' % (self._env_name)))
+
+        self.reward_sess.run(tf.global_variables_initializer())
+        tensors = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
+
         
-        model_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        init_op = tf.initialize_all_variables()
+        self.__observation = [t for t in tensors if t.name == 'gcl/obs:0'][0]
+        self.__action = [t for t in tensors if t.name == 'gcl/act:0'][0]
+        self.__reward_net = [t for t in tensors if t.name == 'gcl/discrim/reward_fn:0'][0]
 
-        with tf.Session() as sess:
-            saver = tf.train.Saver(model_vars)
-            saver.restore(sess, '/home/tejas/Workspace/STRAP/models/irl/%s/model_%s' % (self._env_name, self._env_name))
-            sess.run(tf.global_variables_initializer())
-            sess.run(tf.local_variables_initializer())
-            sess.run(tf.variables_initializer(model_vars))
-
-        self.__reward_net = self._model.irl_model.discriminator
-        print ('Model restored')
+        print ("------------- Model restored -------------")
     
     def get_reward_network(self):
         """ Get the reward function to extract reward given Observation and Action values """
@@ -139,18 +153,22 @@ class IRL:
         action_one_hot = action_one_hot.reshape(1, -1)
         reward = None
 
-        reward_op = self.__reward_net(self._env.spec, self._model.irl_model.obs_t, self._model.irl_model.act_t)
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            reward = sess.run(reward_op, feed_dict={self._model.irl_model.obs_t: observation, self._model.irl_model.act_t: action_one_hot})
+        feed = {self.__observation: observation, self.__action: action_one_hot}
+        reward = self.reward_sess.run(self.__reward_net, feed_dict=feed)
+        print (-reward)
 
-        return -reward
+        return -reward[0][0]
 
 """
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 Functions
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 """
+
+def get_device():
+    from tensorflow.python.client import device_lib
+    local_device_protos = device_lib.list_local_devices()
+    return '/gpu:0' if len([x.name for x in local_device_protos if x.device_type == 'GPU']) > 0 else '/cpu:0'
 
 def __plot_results(losses, title=""):
     import matplotlib.pyplot as plt
@@ -191,22 +209,30 @@ def train_AIRL(env_name):
         env_spec=env.spec, 
         expert_trajs=experts
     )
+    # policy = CategoricalConvPolicy(
+    #     name='policy', 
+    #     env_spec=env.spec,
+    #     conv_filters=[32, 64, 64], 
+    #     conv_filter_sizes=[7, 5, 3], 
+    #     conv_strides=[2, 1, 2], 
+    #     conv_pads=['SAME'] * 3
+    # )
     policy = CategoricalConvPolicy(
         name='policy', 
         env_spec=env.spec,
         conv_filters=[32, 64, 64], 
-        conv_filter_sizes=[3] * 3, 
-        conv_strides=[2, 1, 2], 
-        conv_pads=['SAME'] * 3
+        conv_filter_sizes=[8, 4, 3], 
+        conv_strides=[4, 2, 1], 
+        conv_pads=['VALID'] * 3
     )
     algo = IRLTRPO(
         env=env,
         policy=policy,
         irl_model=irl_model,
         n_itr=N_ITERATIONS,
-        batch_size=200,
-        max_path_length=200,
-        discount=0.99,
+        batch_size=50,
+        max_path_length=500,
+        discount=0.98,
         store_paths=True,
         discrim_train_itrs=1,
         irl_model_wt=1.0,
@@ -226,20 +252,21 @@ def train_AIRL(env_name):
     if not os.path.isdir('models/irl'):
         os.mkdir('models/irl')
     if os.path.isdir('models/irl/%s' % env_name):
-        with tf.Session() as sess:
-            saver.restore(sess, '/home/tejas/Workspace/STRAP/models/irl/%s/model_%s' % (env_name, env_name))
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            saver.restore(sess, 'models/irl/%s/model_%s' % (env_name, env_name))
             sess.run(tf.global_variables_initializer())
-            sess.run(tf.local_variables_initializer())
-            sess.run(tf.variables_initializer(model_vars))
+            # sess.run(tf.local_variables_initializer())
+            # sess.run(tf.variables_initializer(model_vars))
     else:
         os.mkdir('models/irl/%s' % env_name)
+    print ("------------- Model restored -------------")
 
     # Training
     losses = None
     with rllab_logdir(algo=algo, dirname='data/'+env_name+'_gcl'):
-        with tf.Session() as sess:
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             losses = algo.train()
-            saver.save(sess, '/home/tejas/Workspace/STRAP/models/irl/%s/model_%s' % (env_name, env_name))
+            saver.save(sess, 'models/irl/%s/model_%s' % (env_name, env_name))
     
     # Writing losses to file
     assert losses != None, "BUG: Please check implementation, loss not returned from training"
@@ -254,13 +281,35 @@ def train_AIRL(env_name):
 
 def test_airl(env_name):
     """ Just a test function which passes initial environment observation and random action to STRAP IRL and gets some reward back """
+    import time
+
     tfenv = TfEnv(GymEnv(env_name + '-v0', record_video=False, record_log=False))
     irl = IRL(tfenv, env_name)
 
     env = gym.make(env_name + '-v0')
+    start = time.time()
     observation = irl.downsample_image(env.reset(), IMG_SIZE)
-    print (observation.shape)
+    downsample_time = time.time() - start
+    print ('Downsampling time: %.3f' % (time.time() - start))
+
     observation = np.stack([observation] * STACK_SIZE, axis=2)
     action = np.asarray([env.action_space.sample()])
+    observation = observation.reshape((1, IMG_SIZE, IMG_SIZE, STACK_SIZE))
+    start = time.time()
     reward = irl.get_reward(observation, action)
+    print ('IRL time: %.3f' % (time.time() - start))
+
     print ('Reward = %d' % reward)
+    irl.reward_sess.close()
+
+def irl_stats(stat_to_show='IRLAverageEnergy'):
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    stats = pd.read_csv('results/progress.csv')
+    vals = stats[stat_to_show]
+    plt.plot(range(len(vals)), vals)
+    plt.xlabel('Iteration')
+    plt.ylabel(stat_to_show)
+    plt.title('Analysis of IRL training')
+    plt.show()

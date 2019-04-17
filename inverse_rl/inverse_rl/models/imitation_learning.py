@@ -303,7 +303,7 @@ class AIRLStateAction(SingleTimestepIRL):
                     self.energy = discrim_arch(env_spec, self.obs_t, self.act_t)
                 # we do not learn a separate log Z(s) because it is impossible to separate from the energy
                 # In a discrete domain we can explicitly normalize to calculate log Z(s)
-                log_p_tau = -self.energy
+                log_p_tau = tf.math.negative(self.energy, name='reward_fn')
                 discrim_vars = tf.get_collection('reg_vars', scope=dvs.name)
 
             log_q_tau = self.lprobs

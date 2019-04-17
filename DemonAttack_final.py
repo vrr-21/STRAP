@@ -39,8 +39,8 @@ IM_SIZE = IMG_SIZE
 CUDA_VISIBLE_DEVICES=0 #Using Nvidia GPU:0
 TARGET_UPDATE_PERIOD = 100
 MAX_EXPERIENCES = 500000
-MIN_EXPERIENCES = 50000
-K = 6 #action space
+MIN_EXPERIENCES = 32
+K = 7 #action space
 
 
 # In[5]:
@@ -71,7 +71,7 @@ class DQN:
         
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
             #considering input as 4 series of images
-            self.X = tf.placeholder(tf.float32, shape = (None, 4, IM_SIZE, IM_SIZE), name = 'X') 
+            self.X = tf.placeholder(tf.float32, shape = (None, IM_SIZE, IM_SIZE, 4), name = 'X') 
             #order: (num_samples, height, width, "color")
             
             #RL variables
@@ -86,7 +86,7 @@ class DQN:
             for num_output_filters, filtersz, stridesz in conv_layer_sizes:
                 #print("debugging: ")
                 #print((num_output_filters, filtersz, stridesz))
-                Z = tf.contrib.layers.conv2d(Z, num_output_filters, filtersz, stride = stridesz, activation_fn=tf.nn.relu, scope="__conv"+str(i))
+                Z = tf.contrib.layers.conv2d(Z, num_output_filters, filtersz, stride = stridesz, activation_fn=tf.nn.relu)
                 i += 1
                 
             #fully connected layers
@@ -144,8 +144,11 @@ def learn(model, target_model, experience_replay_buffer, gamma, batch_size):
     samples = random.sample(experience_replay_buffer, batch_size)
     states, actions, rewards, next_states, dones = map(np.array, zip(*samples))
 
+    # rewards = rewards.transpose([1,0])
+
     # Calculate the targets
     next_Qs= target_model.predict(next_states)
+    # import IPython; IPython.embed();
 
     #the reward with max reward:
     next_Q = np.max(next_Qs, axis = 1)
@@ -162,7 +165,8 @@ def learn(model, target_model, experience_replay_buffer, gamma, batch_size):
 # In[9]:
 
 
-def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size, epsilon, epsilon_change, epsilon_min):
+def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size, epsilon, epsilon_change, epsilon_min, episode_num=0):
+    import time
     t0 = datetime.now()
 
     #Reset the environment
@@ -170,7 +174,7 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
     obs_small = irl.downsample_image(obs, IMG_SIZE)
     #always state is most recent 4 frames
     state = np.stack([obs_small]*4, axis=2)
-    assert(state.shape == (4, 80, 80))
+    assert(state.shape == (IMG_SIZE, IMG_SIZE, 4))
     loss = None
         
     total_time_training = 0
@@ -186,23 +190,35 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
             target_model.copy_from(model)
 
         #also take actions to learn the game
+        start = time.time()
         action = model.sample_action(state, epsilon)
+        dqn_time = time.time() - start
+        print ('DQN Time: %.3f' % (dqn_time))
 
         #find the reward
         obs, reward_env, done,_ = env.step(action)
+
+        start = time.time()
         obs = irl.downsample_image(obs, IMG_SIZE)
         reward_irl = reward = irl.get_reward(state, action)
+        irl_time = time.time() - start
+        print ('IRL Time: %.3f' % (irl_time))
+        # import IPython; IPython.embed();
         # obs_small = downsample_image(obs)
+
+        if to_render:
+            env.render()
 
         next_state = np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
         state  = next_state
 
-
+        # if total_t == 10:
+        #     import IPython; IPython.embed();
 
         total_t += 1
-        episode_reward += reward
+        print ('Episode: %d, Iteration: %d, IRL Reward: %.3f, Env reward: %d' % (episode_num, total_t, reward_irl, reward_env))
+        episode_reward += reward_irl
         num_steps_in_episode += num_steps_in_episode
-
 
         #updating the experience replay buffer
         if len(experience_replay_buffer)> MAX_EXPERIENCES:
@@ -238,88 +254,103 @@ def update_state(state, obs):
 
 if __name__ == '__main__':    
     #hyperparameters and initialization
-    tf.reset_default_graph()
-    conv_layer_sizes = [(32, 8, 4), (64, 4, 2), (64, 3, 1)]
-    hidden_layer_sizes = [512]
-    gamma = 0.99
-    batch_size = 32
-    num_episodes= 10
-    total_t = 0
-    experience_replay_buffer = []
-    episode_rewards = np.zeros(num_episodes)
-
-    
-    #epsilon decays over time
-    epsilon = 1.0
-    epsilon_min = 0.1
-    epsilon_change = (epsilon - epsilon_min)/ 500000
-
-    #Make the environment
-    env = gym.envs.make("Assault-v0")
-    to_render = True
-
-    try:
-        env.render()
-    except:
-        to_render = False
-    #env = wrappers.Monitor(env, '../neural_reinforcement_agents')
-
-    #Creat models
-    model = DQN(K= K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "model")
-
-    target_model = DQN(K=K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "target_model")
-    
     irl = IRL(TfEnv(GymEnv('Assault-v0', record_video=False, record_log=False)), 'Assault')
-    # with tf.Session() as sess_dqn:
-    sess_dqn = tf.Session()
+    try:
+        tf.reset_default_graph()
+        conv_layer_sizes = [(32, 8, 4), (64, 4, 2), (64, 3, 1)]
+        hidden_layer_sizes = [512]
+        gamma = 0.99
+        batch_size = 32
+        num_episodes= 50
+        total_t = 0
+        experience_replay_buffer = []
+        episode_rewards = np.zeros(num_episodes)
 
-    #Trying to fill in the experience buffer not learning anything!
-    model.set_session(sess_dqn)
-    target_model.set_session(sess_dqn)
-
-    sess_dqn.run(tf.global_variables_initializer())
-
-    obs = env.reset()
-    obs_small = irl.downsample_image(obs, IMG_SIZE)
-
-    state = np.stack([obs_small]*4, axis=2)
-
-    for i in range(MIN_EXPERIENCES):
-        action = np.random.choice(K)
         
-        reward_irl = reward = irl.get_reward(state, action)
-        obs, reward_env, done,_ = env.step(action)
+        #epsilon decays over time
+        epsilon = 1.0
+        epsilon_min = 0.1
+        epsilon_change = (epsilon - epsilon_min)/ 500000
+
+        #Make the environment
+        env = gym.envs.make("Assault-v0")
+        to_render = False
+
+        try:
+            if to_render:
+                env.render()
+        except:
+            to_render = False
+        #env = wrappers.Monitor(env, '../neural_reinforcement_agents')
+
+        #Create models
+        model = DQN(K= K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "model")
+
+        target_model = DQN(K=K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "target_model")
+        
+        # with tf.Session() as sess_dqn:
+        sess_dqn = tf.Session()
+
+        #Trying to fill in the experience buffer not learning anything!
+        model.set_session(sess_dqn)
+        target_model.set_session(sess_dqn)
+
+        sess_dqn.run(tf.global_variables_initializer())
+
+        obs = env.reset()
         obs_small = irl.downsample_image(obs, IMG_SIZE)
-        print('Experience: %d, Reward from IRL: %.3f, Reward from Env: %d' % (i, reward_irl, reward_env))
-        if to_render:
-            env.render()
-        next_state = update_state(state, obs_small)
 
-        experience_replay_buffer.append((state, action, reward, next_state, done))
+        state = np.stack([obs_small]*4, axis=2)
 
-        if done:
-            obs = env.reset()
+        for i in range(MIN_EXPERIENCES):
+            action = np.random.choice(K)
+            
+            reward_irl = reward = irl.get_reward(state, action)
+            obs, reward_env, done,_ = env.step(action)
             obs_small = irl.downsample_image(obs, IMG_SIZE)
-            state = np.stack([obs]*4, axis=2)
 
-        else:
-            state = next_state
+            if to_render:
+                env.render()
+            print ('Experience collected: %3d/%3d' % (i, MIN_EXPERIENCES), end='\r')
+            next_state = update_state(state, obs_small)
+
+            # import IPython; IPython.embed();
+            experience_replay_buffer.append((state, action, reward, next_state, done))
+
+            if done:
+                obs = env.reset()
+                obs_small = irl.downsample_image(obs, IMG_SIZE)
+                state = np.stack([obs]*4, axis=2)
+
+            else:
+                state = next_state
 
 
-    #Now play episodes and learning starts from here!!
-    env = gym.envs.make("Assault-v0")
-    env = wrappers.Monitor(env, './', force= True)
-    for i in range(num_episodes):
-    
-        total_t, episode_reward, duration, num_steps_in_episode, epsilon = play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min)
-        episode_rewards[i] = episode_reward
+        #Now play episodes and learning starts from here!!
+        env = gym.envs.make("Assault-v0")
+        env = wrappers.Monitor(env, './', force= True)
+        for i in range(num_episodes):
+        
+            total_t, episode_reward, duration, num_steps_in_episode, epsilon = play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min, i)
+            episode_rewards[i] = episode_reward
 
-        print("Episode:", i, " Duration:", duration, " Reward:", episode_reward)
+            print("Episode:", i, " Duration:", duration, " Reward:", episode_reward)
 
-        sys.stdout.flush()
-    
-    sess_dqn.close()
+            sys.stdout.flush()
+        
+        sess_dqn.close()
+    except KeyboardInterrupt:
+        print ('\nProgram halted')
+        pass
+    finally:
+        irl.reward_sess.close()
+        # import matplotlib.pyplot as plt
 
+        # plt.plot(range(len(episode_rewards)), episode_rewards)
+        # plt.title("Rewards")
+        # plt.xlabel("Episode")
+        # plt.ylabel("Reward")
+        # plt.show()
 
 # In[ ]:
 
