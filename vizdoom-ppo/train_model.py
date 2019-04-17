@@ -10,9 +10,9 @@ env = gym.make('VizdoomTakeCover-v0')
 
 env = DummyVecEnv([lambda: env])
 
-model = PPO2(MlpPolicy, env, ent_coef=0.1, verbose=1)
+model = PPO2(MlpPolicy, env, ent_coef=0.5, verbose=1)
 
-model.learn(total_timesteps=1e6)
+model.learn(total_timesteps=100000)
 # Save the agent
 model.save("models/ppo_vizdoom_takecover1e6")
 
