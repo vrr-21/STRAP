@@ -82,8 +82,8 @@ class IRL:
 
         # Reconstruct entire AIRL graph
         self.reward_sess = tf.InteractiveSession()
-        saver = tf.train.import_meta_graph('models/irl/%s_new/model_%s.meta' % (self._env_name, self._env_name))
-        saver.restore(self.reward_sess, tf.train.latest_checkpoint('models/irl/%s_new/' % (self._env_name)))
+        saver = tf.train.import_meta_graph('models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
+        saver.restore(self.reward_sess, tf.train.latest_checkpoint('models/irl/%s/' % (self._env_name)))
 
         # Get references to requires tensors - Observation, action placeholders and energy operation
         tensors = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
