@@ -9,6 +9,7 @@ from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 import numpy as np
 from collections import deque
+from parameters import *
 
 from inverse_rl.utils.hyperparametrized import Hyperparametrized
 
@@ -49,6 +50,8 @@ class IRLBatchPolopt(RLAlgorithm):
             zero_environment_reward=False,
             init_irl_params=None,
             train_irl=True,
+            sess=None,
+            env_name='Assault',
             key='',
             **kwargs
     ):
@@ -97,6 +100,7 @@ class IRLBatchPolopt(RLAlgorithm):
         self.no_reward = zero_environment_reward
         self.discrim_train_itrs = discrim_train_itrs
         self.train_irl = train_irl
+        self.env_name = env_name
         self.__irl_params = None
 
         if self.irl_model_wt > 0:
@@ -179,7 +183,6 @@ class IRLBatchPolopt(RLAlgorithm):
 
     def train(self):
         sess = tf.get_default_session()
-        sess.run(tf.global_variables_initializer())
         if self.init_pol_params is not None:
             self.policy.set_param_values(self.init_pol_params)
         if self.init_irl_params is not None:
@@ -218,7 +221,21 @@ class IRLBatchPolopt(RLAlgorithm):
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
                               "continue...")
+            
+            if (itr + 1) % CHECKPOINT_DURATION == 0:
+                saver = tf.train.Saver()
+                saver.save(sess, 'models/irl/%s/model_%s' % (self.env_name, self.env_name))
+                print ('-'*40)
+                print ('Checkpoint saved after %d iterations' % (itr + 1))
+                print ('-'*40)
+                print ()
         
+        saver = tf.train.Saver()
+        saver.save(sess, 'models/irl/%s/model_%s' % (self.env_name, self.env_name))
+        print ('-'*40)
+        print ('Checkpoint saved after %d iterations' % (itr + 1))
+        print ('-'*40)
+        print ()
         self.shutdown_worker()
         return losses
 

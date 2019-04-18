@@ -105,6 +105,8 @@ ENV/
 # VS Code and model files
 .vscode/
 models/irl
+models/dqn
+models/vanilla_dqn
 
 # CSV Files
 *.csv
@@ -112,3 +114,5 @@ models/irl
 
 # Vizdoom ini file
 _vizdoom.ini
+
+openaigym.*

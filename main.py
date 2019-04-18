@@ -3,7 +3,7 @@ sys.path.append('inverse_rl/')
 sys.path.append('rllab/')
 sys.path.append('inverse_rl/vizdoomgym')
 
-from utils import collect_data, train_AIRL, test_airl, InvalidArgumentError
+from utils import collect_data, train_AIRL, test_airl, test_dqn, InvalidArgumentError
 
 if __name__ == "__main__":
 
@@ -24,5 +24,7 @@ if __name__ == "__main__":
         train_AIRL(env)
     elif mode == 'test':
         test_airl(env)
+    elif mode == 'dqn':
+        test_dqn()
     else:
         raise InvalidArgumentError("Mode '" + mode + "' not supported.")

@@ -9,7 +9,8 @@ sys.path.append('inverse_rl/')
 sys.path.append('rllab/')
 
 from builtins import range
-from utils import IRL, TfEnv, GymEnv, IMG_SIZE
+from utils import IRL, TfEnv, GymEnv
+from parameters import *
 
 # In[2]:
 
@@ -69,7 +70,8 @@ class DQN:
         self.K= K
         self.scope = scope
         
-        with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+        with tf.variable_scope(scope):
+            print ('Creating DQN Model')
             #considering input as 4 series of images
             self.X = tf.placeholder(tf.float32, shape = (None, IM_SIZE, IM_SIZE, 4), name = 'X') 
             #order: (num_samples, height, width, "color")
@@ -105,6 +107,7 @@ class DQN:
             self.train_op = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6).minimize(cost)
      
             self.cost = cost
+
     
     def copy_from(self, other):
         mine = [t for t in tf.trainable_variables() if t.name.startswith(self.scope)]
@@ -179,7 +182,8 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
         
     total_time_training = 0
     num_steps_in_episode = 1
-    episode_reward = 0
+    episode_reward_irl = 0
+    episode_reward_env = 0
     #env = env.monitor.start('../neural_reinforcement_agents')
     done = False
     while not done:
@@ -190,34 +194,25 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
             target_model.copy_from(model)
 
         #also take actions to learn the game
-        start = time.time()
         action = model.sample_action(state, epsilon)
-        dqn_time = time.time() - start
-        print ('DQN Time: %.3f' % (dqn_time))
 
         #find the reward
         obs, reward_env, done,_ = env.step(action)
 
-        start = time.time()
         obs = irl.downsample_image(obs, IMG_SIZE)
-        reward_irl = reward = irl.get_reward(state, action)
-        irl_time = time.time() - start
-        print ('IRL Time: %.3f' % (irl_time))
-        # import IPython; IPython.embed();
-        # obs_small = downsample_image(obs)
-
+        reward_irl = irl.get_reward(state, action)
+        reward = reward_irl
+        
         if to_render:
             env.render()
 
         next_state = np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
         state  = next_state
 
-        # if total_t == 10:
-        #     import IPython; IPython.embed();
-
         total_t += 1
-        print ('Episode: %d, Iteration: %d, IRL Reward: %.3f, Env reward: %d' % (episode_num, total_t, reward_irl, reward_env))
-        episode_reward += reward_irl
+        print ('Episode: %2d, Iteration: %5d, IRL Reward: %.3f, Env reward: %2d' % (episode_num, total_t, reward_irl, reward_env), end='\r')
+        episode_reward_irl += reward
+        episode_reward_env += reward_env
         num_steps_in_episode += num_steps_in_episode
 
         #updating the experience replay buffer
@@ -238,7 +233,7 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
         #updating the epsilon value
         epsilon = max(epsilon- epsilon_change, epsilon_min)
 
-    return total_t, episode_reward, (datetime.now() - t0), num_steps_in_episode, epsilon
+    return total_t, episode_reward_irl, episode_reward_env, (datetime.now() - t0), num_steps_in_episode, epsilon
 
 
 # In[10]:
@@ -254,17 +249,21 @@ def update_state(state, obs):
 
 if __name__ == '__main__':    
     #hyperparameters and initialization
-    irl = IRL(TfEnv(GymEnv('Assault-v0', record_video=False, record_log=False)), 'Assault')
+    # irl = IRL(TfEnv(GymEnv('Assault-v0', record_video=False, record_log=False)), 'Assault')
+    env = gym.envs.make("Assault-v0")
+    irl = IRL(env, 'Assault')
+    to_render = True
     try:
         tf.reset_default_graph()
         conv_layer_sizes = [(32, 8, 4), (64, 4, 2), (64, 3, 1)]
         hidden_layer_sizes = [512]
         gamma = 0.99
         batch_size = 32
-        num_episodes= 50
+        num_episodes= NUM_EPISODES
         total_t = 0
         experience_replay_buffer = []
-        episode_rewards = np.zeros(num_episodes)
+        episode_rewards_irl = np.zeros(num_episodes)
+        episode_rewards_env = np.zeros(num_episodes)
 
         
         #epsilon decays over time
@@ -274,7 +273,6 @@ if __name__ == '__main__':
 
         #Make the environment
         env = gym.envs.make("Assault-v0")
-        to_render = False
 
         try:
             if to_render:
@@ -284,9 +282,9 @@ if __name__ == '__main__':
         #env = wrappers.Monitor(env, '../neural_reinforcement_agents')
 
         #Create models
-        model = DQN(K= K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "model")
+        model = DQN(K= K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "modeldqn")
 
-        target_model = DQN(K=K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "target_model")
+        target_model = DQN(K=K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "target_modeldqn")
         
         # with tf.Session() as sess_dqn:
         sess_dqn = tf.Session()
@@ -308,9 +306,6 @@ if __name__ == '__main__':
             reward_irl = reward = irl.get_reward(state, action)
             obs, reward_env, done,_ = env.step(action)
             obs_small = irl.downsample_image(obs, IMG_SIZE)
-
-            if to_render:
-                env.render()
             print ('Experience collected: %3d/%3d' % (i, MIN_EXPERIENCES), end='\r')
             next_state = update_state(state, obs_small)
 
@@ -327,16 +322,36 @@ if __name__ == '__main__':
 
 
         #Now play episodes and learning starts from here!!
-        env = gym.envs.make("Assault-v0")
         env = wrappers.Monitor(env, './', force= True)
-        for i in range(num_episodes):
         
-            total_t, episode_reward, duration, num_steps_in_episode, epsilon = play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min, i)
-            episode_rewards[i] = episode_reward
+        if not os.path.isdir('models'):
+            os.mkdir('models')
+        if not os.path.isdir('models/dqn'):
+            os.mkdir('models/dqn')
+        if not os.path.isdir('models/dqn/Assault_with_env_added'):
+            os.mkdir('models/dqn/Assault_with_env_added')
+        else:
+            try:
+                saver = tf.train.Saver()
+                saver.restore(sess_dqn, 'models/dqn/Assault_with_env_added/model') 
+                print ("------------- Assault Model restored -------------")
+                del saver
+            except ValueError:
+                print ("------------------ Couldn't find model in directory \"models/dqn/Assault\" ------------------")
 
-            print("Episode:", i, " Duration:", duration, " Reward:", episode_reward)
+        for i in range(num_episodes):
+            saver = tf.train.Saver()
+            total_t, episode_reward_irl, episode_reward_env, duration, num_steps_in_episode, epsilon = \
+                play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min, i)
+            
+            episode_rewards_irl[i] = episode_reward_irl
+            episode_rewards_env[i] = episode_reward_env
+            print("Episode:", i, " Duration:", duration, " IRL Episode Reward:", episode_reward_irl, "Env Episode reward:", episode_reward_env)
 
             sys.stdout.flush()
+            if (i + 1) % 5 == 0:
+                saver.save(sess_dqn, 'models/dqn/Assault_with_env_added/model')
+                print ('--------------------- DQN Checkpointed after %d episodes ---------------------' % (i + 1))
         
         sess_dqn.close()
     except KeyboardInterrupt:
@@ -344,13 +359,23 @@ if __name__ == '__main__':
         pass
     finally:
         irl.reward_sess.close()
-        # import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt
 
-        # plt.plot(range(len(episode_rewards)), episode_rewards)
-        # plt.title("Rewards")
+        plot1 = plt.subplot(2, 2, 1)
+        plot2 = plt.subplot(2, 2, 2)
+        plt.title('IRL Rewards and Env rewards')
+
+        plot1.plot(range(len(episode_rewards_irl)), episode_rewards_irl)
+        # plt.title("IRL Rewards")
         # plt.xlabel("Episode")
         # plt.ylabel("Reward")
         # plt.show()
+
+        plot2.plot(range(len(episode_rewards_env)), episode_rewards_env)
+        # plt.title("Env Rewards")
+        # plt.xlabel("Episode")
+        # plt.ylabel("Reward")
+        plt.show()
 
 # In[ ]:
 
