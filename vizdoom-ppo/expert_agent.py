@@ -8,10 +8,14 @@ from stable_baselines import PPO2
 
 from Expert_Trajectory import Experience
 
+def update_state(state, obs):
+   # obs_small = downsample_image(obs)
+   return np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
+
 TRAJECTORY_LENGTH = 20000
 N_TRAJECTORIES = 20
 
-env = gym.make('VizdoomTakeCover-v0')
+env = gym.make('VizdoomDefendLine-v0')
 
 env = DummyVecEnv([lambda: env])
 
@@ -23,23 +27,27 @@ obs = env.reset()
 episode_rewards = [0.0]
 current_ep = 1
 num_eps = 10
+state = np.stack([obs[0]]*4, axis=2)
+
 while current_ep <= num_eps:
     action, _ = model.predict(obs)
     env.render()
-    obs_cache = obs
     obs, rewards, dones, info = env.step(action)
+    update_state(state, obs[0])
     episode_rewards[-1] += rewards[0]
-    if not experience.append(obs_cache, action, rewards[0]):
+    if not experience.append(state, action, rewards[0]):
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizDoomTakeCoverColab', file_name='itr'+str(current_ep - 1))
+        experience.save(env_name = 'VizdoomDefendLine', file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
+        state = np.stack([obs[0]]*4, axis=2)
         continue
     if dones[0]:
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizDoomTakeCoverColab', file_name='itr'+str(current_ep - 1))
+        experience.save(env_name = 'VizdoomDefendLine', file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
+        state = np.stack([obs[0]]*4, axis=2)
         continue
