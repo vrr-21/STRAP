@@ -112,3 +112,5 @@ models/irl
 
 # Vizdoom ini file
 _vizdoom.ini
+
+*.pyc
