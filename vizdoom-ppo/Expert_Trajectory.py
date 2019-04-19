@@ -16,14 +16,12 @@ class Experience(object):
         import cv2, numpy as np
         # from parameters import IMG_SIZE
         IMG_SIZE = 84
-
-        image = image.transpose((3, 0, 1, 2))
+        image = image.transpose((2, 0, 1, 3))
         new_image = []
         for i in range(len(image)):
             new_image.append(cv2.resize(cv2.cvtColor(image[i], cv2.COLOR_RGB2GRAY), (IMG_SIZE, IMG_SIZE)))
-
         new_image = np.array(new_image, dtype=np.uint8)
-        return new_image.transpose((2, 0, 1))
+        return new_image.transpose((1,2,0))
 
     def append(self, observation, action, reward):
         import cv2, numpy as np

@@ -9,13 +9,12 @@ from stable_baselines import PPO2
 from Expert_Trajectory import Experience
 
 def update_state(state, obs):
-   # obs_small = downsample_image(obs)
    return np.append(state[:,:,1:], np.expand_dims(obs, 2), axis=2)
 
 TRAJECTORY_LENGTH = 20000
 N_TRAJECTORIES = 20
 
-env = gym.make('VizdoomDefendLine-v0')
+env = gym.make('VizdoomTakeCover-v0')
 
 env = DummyVecEnv([lambda: env])
 
@@ -37,7 +36,7 @@ while current_ep <= num_eps:
     episode_rewards[-1] += rewards[0]
     if not experience.append(state, action, rewards[0]):
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizdoomDefendLine', file_name='itr_'+str(current_ep - 1))
+        experience.save(env_name = 'VizdoomTakeCover', file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
@@ -45,7 +44,7 @@ while current_ep <= num_eps:
         continue
     if dones[0]:
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizdoomDefendLine', file_name='itr_'+str(current_ep - 1))
+        experience.save(env_name = 'VizdoomTakeCover', file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
