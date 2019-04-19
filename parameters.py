@@ -1,6 +1,6 @@
 # Parameters related to Observation size
-IMG_SIZE = 24
-STACK_SIZE = 4
+IMG_SIZE = 84
+STACK_SIZE = 1
 
 # Parameters related to Expert data collection
 TRAJECTORY_LENGTH = 2000

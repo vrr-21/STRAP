@@ -34,6 +34,7 @@ from inverse_rl.algos.irl_trpo import IRLTRPO
 ''' Other imports '''
 import tensorflow as tf, gym, numpy as np, os, cv2
 from scipy.misc import imresize
+import vizdoomgym
 
 ''' Constants '''
 from parameters import IMG_SIZE, STACK_SIZE, START_ITR, DATA_COLLECT_EPISODES, N_ITERATIONS
@@ -204,7 +205,7 @@ def train_AIRL(env_name):
     env = TfEnv(GymEnv(env_name+'-v0', record_video=False, record_log=False))
     
     # AIRL Architecture
-    experts = load_latest_experts('data/'+env_name, n=5)
+    experts = load_latest_experts('data/'+env_name, n=10)
     irl_model = AIRLStateAction(
         env_spec=env.spec, 
         expert_trajs=experts
