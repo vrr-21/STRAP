@@ -9,4 +9,4 @@ DATA_COLLECT_EPISODES = 5
 
 # Parameters related to training AIRL Model
 START_ITR = 0
-N_ITERATIONS = 4
+N_ITERATIONS = 10
