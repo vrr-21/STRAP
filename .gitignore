@@ -104,7 +104,7 @@ ENV/
 
 # VS Code and model files
 .vscode/
-models/irl
+models/
 
 # CSV Files
 *.csv
@@ -114,3 +114,5 @@ models/irl
 _vizdoom.ini
 
 *.pyc
+
+*.tar.gz
