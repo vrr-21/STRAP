@@ -21,7 +21,7 @@ from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
 
 ''' RLLab imports '''
-from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
+from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.envs.gym_env import GymEnv
 from rllab.envs.normalized_env import normalize
 
@@ -173,7 +173,9 @@ def train_AIRL(env_name):
     # AIRL Architecture
     experts = load_latest_experts('data/'+env_name, n=5)
     irl_model = AIRLStateAction(
-        env_spec=env.spec, 
+        env_spec=env.spec,
+        l2_reg=0.01,
+        discount= 0.95, 
         expert_trajs=experts
     )
     # policy = CategoricalConvPolicy(
@@ -283,16 +285,7 @@ def train_AIRLState(env_name):
         start_itr=START_ITR,
         entropy_weight=1., # this should be 1.0 but 0.1 seems to work better
         zero_environment_reward=True,
-        baseline=GaussianConvBaseline(
-            env_spec=env.spec,
-            regressor_args={
-                'conv_filters':[32,64,64],
-                'conv_filter_sizes':[3]*3,
-                'conv_strides':[2,1,2],
-                'conv_pads':['valid']*3,
-                'hidden_sizes':[32,32]
-            }
-        )
+        baseline=ZeroBaseline(env_spec=env.spec)
     )
     
     sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))

@@ -1,6 +1,8 @@
 
-
-from joblib.pool import MemmapingPool
+try:
+    from joblib.pool import MemmappingPool
+except:
+    from joblib.pool import MemmapingPool
 import multiprocessing as mp
 from rllab.misc import logger
 import pyprind

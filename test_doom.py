@@ -21,11 +21,12 @@ def load(model_meta, model_path, sess):
     return x, predict_op
 
 def main():
-    assert len(sys.argv) == 4, "Did not provide 4 arguments!"
+    assert len(sys.argv) == 5, "Did not provide 4 arguments!"
     model_meta = sys.argv[1]
     model_path = sys.argv[2]
     game_name = sys.argv[3]
-    global NUM_EPISODES, RENDER
+    NUM_EPISODES = int(sys.argv[4])
+    global RENDER
 
     sess = tf.Session()
     ip, predict_op = load(model_meta, model_path, sess)
@@ -38,7 +39,7 @@ def main():
     except:
         RENDER = False
     episode_num = 1
-
+    episode_rews = []
     while episode_num <= NUM_EPISODES:
         obs = env.reset()
         obs_small = downsample_image(obs, IMG_SIZE, down_only = True)
@@ -58,10 +59,13 @@ def main():
             obs_small = downsample_image(obs, IMG_SIZE, down_only= True)
             update_state(state, obs_small)
             if done:
+                episode_rews.append(episode_reward)
                 print("Episode {} finished.".format(episode_num))
                 print("Episode reward: {}".format(episode_reward))
                 episode_num += 1
                 break
+    avg = sum(episode_rews)*1.0/len(episode_rews)
+    print("Average Reward: {}".format(avg))
 
 if __name__ == "__main__":
     main()
