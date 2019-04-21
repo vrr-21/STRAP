@@ -143,7 +143,7 @@ if __name__ == "__main__":
     hidden_layer_sizes = [512, 256]
     gamma = 0.99
     batch_size = 32
-    num_episodes= 100
+    num_episodes= int(sys.argv[1])
     total_t = 0
     experience_replay_buffer = []
     episode_rewards = np.zeros(num_episodes)
