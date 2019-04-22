@@ -27,7 +27,6 @@ from rllab.envs.normalized_env import normalize
 
 ''' Inverse RL imports '''
 from inverse_rl.models.imitation_learning import AIRLStateAction
-from inverse_rl.models.airl_state import AIRL
 from inverse_rl.models.architectures import conv_net
 from inverse_rl.utils.log_utils import rllab_logdir, load_latest_experts
 from inverse_rl.algos.irl_trpo import IRLTRPO
@@ -35,9 +34,10 @@ from inverse_rl.algos.irl_trpo import IRLTRPO
 ''' Other imports '''
 import tensorflow as tf, gym, numpy as np, os, cv2
 from scipy.misc import imresize
+import vizdoomgym
 
 ''' Constants '''
-from parameters import *
+from parameters import IMG_SIZE, STACK_SIZE, START_ITR, DATA_COLLECT_EPISODES, N_ITERATIONS
 
 """
 --------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -51,11 +51,11 @@ class InvalidArgumentError(Exception):
 
 class IRL:
     """ STRAP Inverse Reinforcement Learning """
-    def __init__(self, env, env_name, is_state_action=True):
+    def __init__(self, env, env_name):
+        self._model = None
         self._env = env
         self._env_name = env_name
-        self.is_state_action = is_state_action
-        self.load_model(is_state_action=self.is_state_action)
+        self.load_model()
 
     def downsample_image(self, A, IM_SIZE, down_only=False, gray=True):
         """ Preprocess raw image """
@@ -78,7 +78,13 @@ class IRL:
         obs = imresize(obs,size=(IMG_SIZE, IMG_SIZE), interp= 'nearest')
         return obs
     
-    def load_model(self, is_state_action=True):
+    def load_model(self, is_state_action = True):
+        """ Load saved model into the IRL Tensorflow graph """ 
+
+        """
+        TODO: Check TF Graph
+        """
+
         """ Load saved model into the IRL Tensorflow graph """ 
         tf.reset_default_graph()
 
@@ -86,8 +92,8 @@ class IRL:
         self.reward_sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
 
         if is_state_action:    
-            saver = tf.train.import_meta_graph('models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
-            saver.restore(self.reward_sess, tf.train.latest_checkpoint('models/irl/%s/' % (self._env_name)))
+            saver = tf.train.import_meta_graph('../STRAP/models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
+            saver.restore(self.reward_sess, tf.train.latest_checkpoint('../STRAP/models/irl/%s/' % (self._env_name)))
 
             # Get references to required tensors - Observation, action placeholders and energy operation
             operations = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
@@ -95,8 +101,8 @@ class IRL:
             self.__action = [t for t in operations if t.name == 'gcl/act:0'][0]
             self.__reward_op = [t for t in operations if t.name == 'gcl/discrim/reward_fn:0'][0]
         else:
-            saver = tf.train.import_meta_graph('models/irl_state/%s/model_%s.meta' % (self._env_name, self._env_name))
-            saver.restore(self.reward_sess, tf.train.latest_checkpoint('models/irl_state/%s/' % (self._env_name)))
+            saver = tf.train.import_meta_graph('../STRAP/models/irl_state/%s/model_%s.meta' % (self._env_name, self._env_name))
+            saver.restore(self.reward_sess, tf.train.latest_checkpoint('../STRAP/models/irl_state/%s/' % (self._env_name)))
 
             # Get references to required operations - Observationplaceholders and reward operation
             operations = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
@@ -104,8 +110,12 @@ class IRL:
             self.__reward_op = [t for t in operations if t.name == 'airl/discrim/reward/fc_4/reward_fn/BiasAdd:0'][0]
 
         print ("------------- IRL Model restored -------------")
+    
+    def get_reward_network(self):
+        """ Get the reward function to extract reward given Observation and Action values """
+        return self.__reward_op
 
-    def get_reward(self, observation, action=None):
+    def get_reward(self, observation, action):
         """ Pass Observation and Action, and get back reward from Reward Net """
         import numpy as np
         import tensorflow as tf
@@ -116,13 +126,8 @@ class IRL:
         action_one_hot = action_one_hot.reshape(1, -1)
         reward = None
 
-        if self.is_state_action:
-            feed = {self.__observation: observation, self.__action: action_one_hot}
-        else:
-            feed = {self.__observation: observation}
-
+        feed = {self.__observation: observation, self.__action: action_one_hot}
         reward = self.reward_sess.run(self.__reward_op, feed_dict=feed)
-
         return reward[0][0]
 
 """
@@ -168,14 +173,11 @@ def collect_data(env_name):
 def train_AIRL(env_name):
     """ Train STRAP IRL Model """
     env = TfEnv(GymEnv(env_name+'-v0', record_video=False, record_log=False))
-    tf.reset_default_graph()
     
     # AIRL Architecture
-    experts = load_latest_experts('data/'+env_name, n=5)
+    experts = load_latest_experts('data/'+env_name, n=10)
     irl_model = AIRLStateAction(
-        env_spec=env.spec,
-        l2_reg=0.01,
-        discount= 0.95, 
+        env_spec=env.spec, 
         expert_trajs=experts
     )
     # policy = CategoricalConvPolicy(
@@ -196,24 +198,24 @@ def train_AIRL(env_name):
     )
     algo = IRLTRPO(
         env=env,
-        env_name=env_name,
         policy=policy,
         irl_model=irl_model,
-        n_itr=START_ITR + N_ITERATIONS,
-        batch_size=PATH_LENGTH * N_PATHS,
-        max_path_length=PATH_LENGTH,
+        n_itr=N_ITERATIONS,
+        batch_size=50,
+        max_path_length=500,
         discount=0.98,
         store_paths=True,
-        discrim_train_itrs=DISCRIM_ITRS,
+        discrim_train_itrs=1,
         irl_model_wt=1.0,
         start_itr=START_ITR,
-        entropy_weight=0.001, # this should be 1.0 but 0.1 seems to work better
+        entropy_weight=0.1, # this should be 1.0 but 0.1 seems to work better
         zero_environment_reward=True,
         baseline=ZeroBaseline(env_spec=env.spec)
     )
-    
-    sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
+
     # Restoring previously saved model, if any, from latest checkpoint
+    model_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    saver = tf.train.Saver(model_vars)
     if not os.path.isdir('results'):
         os.mkdir('results')
     if not os.path.isdir('models'):
@@ -221,21 +223,21 @@ def train_AIRL(env_name):
     if not os.path.isdir('models/irl'):
         os.mkdir('models/irl')
     if os.path.isdir('models/irl/%s' % env_name):
-        try:
-            saver = tf.train.Saver()
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             saver.restore(sess, 'models/irl/%s/model_%s' % (env_name, env_name))
-            print ("------------- Model restored -------------")
-        except ValueError:
             sess.run(tf.global_variables_initializer())
-            print ("------------------ Couldn't find model in directory \"models/irl/%s\" ------------------" % env_name)
+            # sess.run(tf.local_variables_initializer())
+            # sess.run(tf.variables_initializer(model_vars))
     else:
-        sess.run(tf.global_variables_initializer())
         os.mkdir('models/irl/%s' % env_name)
+    print ("------------- Model restored -------------")
 
     # Training
     losses = None
     with rllab_logdir(algo=algo, dirname='data/'+env_name+'_gcl'):
-        losses = algo.train()
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            losses = algo.train()
+            saver.save(sess, 'models/irl/%s/model_%s' % (env_name, env_name))
     
     # Writing losses to file
     assert losses != None, "BUG: Please check implementation, loss not returned from training"
@@ -247,91 +249,13 @@ def train_AIRL(env_name):
             loss_file.write('%d,%f\n' % (START_ITR + itr, loss))
 
     __plot_results(losses, "Change in loss over %d iterations" % len(losses))
-
-
-def train_AIRLState(env_name):
-    """ Train STRAP IRL Model """
-    env = TfEnv(GymEnv(env_name+'-v0', record_video=False, record_log=False))
-    tf.reset_default_graph()
-    
-    # AIRL Architecture
-    experts = load_latest_experts('data/'+env_name, n=5)
-    
-    irl_model = AIRL(
-        env, expert_trajs=experts, 
-        max_itrs=DISCRIM_ITRS,
-        score_discrim=True
-    )
-    policy = CategoricalConvPolicy(
-        name='policy', 
-        env_spec=env.spec,
-        conv_filters=[32, 64, 64], 
-        conv_filter_sizes=[8, 4, 3], 
-        conv_strides=[4, 2, 1], 
-        conv_pads=['VALID'] * 3
-    )
-    algo = IRLTRPO(
-        env=env,
-        env_name=env_name,
-        policy=policy,
-        irl_model=irl_model,
-        n_itr=START_ITR + N_ITERATIONS,
-        batch_size=PATH_LENGTH * N_PATHS,
-        max_path_length=PATH_LENGTH,
-        discount=0.98,
-        store_paths=True,
-        discrim_train_itrs=DISCRIM_ITRS,
-        irl_model_wt=1.0,
-        start_itr=START_ITR,
-        entropy_weight=1., # this should be 1.0 but 0.1 seems to work better
-        zero_environment_reward=True,
-        baseline=ZeroBaseline(env_spec=env.spec)
-    )
-    
-    sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
-    # Restoring previously saved model, if any, from latest checkpoint
-    if not os.path.isdir('results'):
-        os.mkdir('results')
-    if not os.path.isdir('models'):
-        os.mkdir('models')
-    if not os.path.isdir('models/irl_state'):
-        os.mkdir('models/irl_state')
-    if os.path.isdir('models/irl_state/%s' % env_name):
-        try:
-            saver = tf.train.Saver()
-            saver.restore(sess, 'models/irl_state/%s/model_%s' % (env_name, env_name))
-            print ("------------- Model restored -------------")
-        except ValueError:
-            sess.run(tf.global_variables_initializer())
-            print ("------------------ Couldn't find model in directory \"models/irl_state/%s\" ------------------" % env_name)
-    else:
-        sess.run(tf.global_variables_initializer())
-        os.mkdir('models/irl_state/%s' % env_name)
-
-    # Training
-    losses = None
-    with rllab_logdir(algo=algo, dirname='data/'+env_name+'_gcl'):
-        losses = algo.train()
-    
-    # Writing losses to file
-    assert losses != None, "BUG: Please check implementation, loss not returned from training"
-    with open('results/irl_loss_' + env_name + '.csv', 'a+') as loss_file:
-        if START_ITR == 0:
-            loss_file.write('Iteration,Loss\n')
-        
-        for itr, loss in enumerate(losses):
-            loss_file.write('%d,%f\n' % (START_ITR + itr, loss))
-
-    __plot_results(losses, "Change in loss over %d iterations" % len(losses))
-
-
 
 def test_airl(env_name):
     """ Just a test function which passes initial environment observation and random action to STRAP IRL and gets some reward back """
     import time
 
     tfenv = TfEnv(GymEnv(env_name + '-v0', record_video=False, record_log=False))
-    irl = IRL(tfenv, env_name, is_state_action=True)
+    irl = IRL(tfenv, env_name)
 
     env = gym.make(env_name + '-v0')
     start = time.time()
@@ -349,34 +273,11 @@ def test_airl(env_name):
     print ('Reward = %d' % reward)
     irl.reward_sess.close()
 
-def test_dqn():
-
-    # TODO: Complete this function. Restore both models, identify placeholders and operations and start game play.
-
-    env = gym.make('Assault-v0')
-    irl = IRL(env, 'Assault')
-
-    dqn = tf.get_default_session()
-    saver = tf.train.import_meta_graph('models/dqn/Assault/model.meta')
-    saver.restore(dqn, tf.train.latest_checkpoint('models/dqn/Assault/'))
-    import IPython; IPython.embed();
-    obs_tensor = [t for op in tf.get_default_graph().get_operations() for t in op.values() if t.name == "modeldqn/X:0"][0]
-
-    obs = env.reset()
-    obs = irl.downsample_image(obs, IMG_SIZE)
-    state = np.stack([obs] * STACK_SIZE, axis=2)
-
-    done = False
-    while not done:
-        
-        act = dqn.run()
-    
-
-def irl_stats(progress_file_path, stat_to_show='IRLAverageEnergy'):
+def irl_stats(stat_to_show='IRLAverageEnergy'):
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    stats = pd.read_csv(progress_file_path)
+    stats = pd.read_csv('results/progress.csv')
     vals = stats[stat_to_show]
     plt.plot(range(len(vals)), vals)
     plt.xlabel('Iteration')

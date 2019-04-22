@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0 #Using Nvidia GPU:0
 TARGET_UPDATE_PERIOD = 100
 MAX_EXPERIENCES = 500000
 MIN_EXPERIENCES = 32
-K = 5 #action space
+K = 7 #action space
 
 def downsample_image(A, IMG_SIZE = 84, down_only=False, gray=True):
     if down_only:
@@ -98,7 +98,7 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
         obs, reward, done,_ = env.step(action)
 
         obs_small = downsample_image(obs, IMG_SIZE, down_only=True)
-        reward_irl = r.get_reward(state, action)
+        reward_irl, action_p = r.get_reward(state, action)
         
 
         if to_render:
@@ -109,10 +109,10 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
 
         total_t += 1
         print ('Episode: %d, Iteration: %d, IRL Reward: %.3f, Env reward: %d' % (episode_num, total_t, reward_irl, reward_env))
-        episode_reward += reward_irl
+        if action_p:
+            reward = reward_irl
+        episode_reward += reward
         num_steps_in_episode += num_steps_in_episode
-
-        reward = reward_irl
 
         #updating the experience replay buffer
         if len(experience_replay_buffer)> MAX_EXPERIENCES:
@@ -185,7 +185,7 @@ if __name__ == "__main__":
         action = np.random.choice(K)
         print('Experience: ', i)
         
-        irl_reward = reward_fetcher.get_reward(state, action)
+        irl_reward, action_p = reward_fetcher.get_reward(state, action)
 
         obs, reward_env, done,_ = env.step(action)
         obs_small = downsample_image(obs, IMG_SIZE, down_only= True)
@@ -198,7 +198,10 @@ if __name__ == "__main__":
         next_state = update_state(state, obs_small)
 
         # import IPython; IPython.embed();
-        experience_replay_buffer.append((state, action, irl_reward, next_state, done))
+        if action_p:
+            experience_replay_buffer.append((state, action, irl_reward, next_state, done))
+        else:
+            experience_replay_buffer.append((state, action, reward_env, next_state, done))
 
         if done:
             obs = env.reset()
