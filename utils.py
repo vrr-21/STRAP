@@ -111,7 +111,7 @@ class IRL:
         feed = {self.__observation: observation, self.__action: action_one_hot}
         reward = self.reward_sess.run(self.__reward_net, feed_dict=feed)
 
-        return -reward[0][0]
+        return reward[0][0]
 
 """
 --------------------------------------------------------------------------------------------------------------------------------------------------------
