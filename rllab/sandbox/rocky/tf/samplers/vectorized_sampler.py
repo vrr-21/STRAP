@@ -38,17 +38,31 @@ class VectorizedSampler(BaseSampler):
             )
         self.env_spec = self.algo.env.spec
 
-    def downsample_image(self, A):
-        B = A[31:195]
-        B = B.mean(axis =2)
-        B = B/255.0
-        B = imresize(B, size= (IMG_SIZE, IMG_SIZE), interp= 'nearest')
-        return B
+    def downsample_image(self, A, IM_SIZE, down_only=False, gray=True):
+        """ Preprocess raw image """
+        if down_only:
+            obs = A
+            obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+            return imresize(obs,size=(IMG_SIZE, IMG_SIZE), interp= 'nearest')
 
-    def vec_downsample(self, A_vec):
+        filt_size = 3
+        blur_size = 5
+        obs = A
+        if gray:
+            obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+        obs -= int(np.median(obs))
+        _, obs = cv2.threshold(obs, 10, 255, cv2.THRESH_BINARY)
+
+        obs = cv2.dilate(obs,np.ones((filt_size,filt_size), np.uint8), iterations=1)
+        obs = cv2.GaussianBlur(obs,(blur_size, blur_size), 0)
+        obs = cv2.GaussianBlur(obs,(blur_size, blur_size), 0)
+        obs = imresize(obs,size=(IMG_SIZE, IMG_SIZE), interp= 'nearest')
+        return obs
+
+    def vec_downsample(self, A_vec, IMG_SIZE):
         B_vec = []
         for a in A_vec:
-            B_vec.append(self.downsample_image(a))
+            B_vec.append(self.downsample_image(a,IM_SIZE=IMG_SIZE,down_only=True))
         return B_vec
 
     def shutdown_worker(self):
