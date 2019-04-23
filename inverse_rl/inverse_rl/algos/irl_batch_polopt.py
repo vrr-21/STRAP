@@ -224,14 +224,14 @@ class IRLBatchPolopt(RLAlgorithm):
             
             if (itr + 1) % CHECKPOINT_DURATION == 0:
                 saver = tf.train.Saver()
-                saver.save(sess, 'models/irl_state/%s/model_%s' % (self.env_name, self.env_name))
+                saver.save(sess, 'models/irl/%s/model_%s' % (self.env_name, self.env_name))
                 print ('-'*40)
                 print ('Checkpoint saved after %d iterations' % (itr + 1))
                 print ('-'*40)
                 print ()
         
         saver = tf.train.Saver()
-        saver.save(sess, 'models/irl_state/%s/model_%s' % (self.env_name, self.env_name))
+        saver.save(sess, 'models/irl/%s/model_%s' % (self.env_name, self.env_name))
         print ('-'*40)
         print ('Checkpoint saved after %d iterations' % (itr + 1))
         print ('-'*40)
