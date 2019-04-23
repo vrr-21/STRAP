@@ -259,7 +259,7 @@ def test_airl(env_name):
 
     env = gym.make(env_name + '-v0')
     start = time.time()
-    observation = irl.downsample_image(env.reset(), IMG_SIZE)
+    observation = irl.downsample_image(env.reset(), IMG_SIZE, down_only=True)
     downsample_time = time.time() - start
     print ('Downsampling time: %.3f' % (time.time() - start))
 
