@@ -62,12 +62,12 @@ class ConvNet:
         """
         return tf.layers.Flatten()(input)
 
-    def fc(self, input, num_output):
+    def fc(self, input, num_output, name=None):
         """
             - input: input tensors
             - num_output: int, the output dimension
         """
-        return tf.layers.dense(input, num_output)
+        return tf.layers.dense(input, num_output, name=name)
 
     def norm(self, input):
         """
@@ -102,6 +102,34 @@ class ConvNet:
         # Output Layer
         with tf.variable_scope("fc"+str(len(self.fc_hidden_sizes)), reuse=tf.AUTO_REUSE):
             self.out = self.fc(net, 1)
+
+        return self.out
+    
+    def get_reward(self, observation):
+        self.observation = observation
+        
+        # Input Layer
+        net = self.unflatten(self.observation)
+
+        # Conv Layers
+        for i, kernel_size, filter_size, stride, padding, use_batch_norm in zip(range(len(self.filters)), self.kernels, self.filters, self.strides, self.paddings, self.use_batch_norms):
+            with tf.variable_scope("conv_" + str(i), reuse=tf.AUTO_REUSE):
+                net = self.conv2d(net, kernel_size, stride, filter_size, padding)
+                if use_batch_norm:
+                    net = self.norm(net)
+                net = tf.nn.relu(net)
+        
+        # Hidden FC Layers
+        net = self.flatten(net)
+        # net = tf.concat([net, self.action], -1)
+        for i, fc_hidden_size in enumerate(self.fc_hidden_sizes):
+            with tf.variable_scope("fc_"+str(i), reuse=tf.AUTO_REUSE):
+                net = self.fc(net, fc_hidden_size)
+                net = tf.nn.relu(net)
+        
+        # Output Layer
+        with tf.variable_scope("fc_"+str(len(self.fc_hidden_sizes)), reuse=tf.AUTO_REUSE):
+            self.out = self.fc(net, 1, name="reward_fn")
 
         return self.out
         
@@ -142,6 +170,44 @@ def conv_net(
     # )
 
     return discrim_net.get_energy(observation, action)
+
+def conv_net_state_only(
+        env_spec,
+        observation, 
+        conv_filters=[32, 64, 64], 
+        kernels=[3, 3, 3], 
+        conv_strides=[2, 1, 2], 
+        conv_pads=['SAME']* 3,
+        use_batch_norms=[True, True, False],
+        hidden_sizes=[2048, 1024, 256, 64]
+    ):
+    
+    # discrim_net = ConvNet(
+    #     env_spec, 
+    #     kernels=kernels, 
+    #     filters=conv_filters, 
+    #     strides=conv_strides, 
+    #     use_batch_norms=use_batch_norms, 
+    #     fc_hidden_sizes=hidden_sizes
+    # )
+    discrim_net = ConvNet(
+        env_spec, 
+        kernels=[8, 4, 3], 
+        filters=[32, 64, 64], 
+        strides=[4, 2, 1], 
+        use_batch_norms=use_batch_norms, 
+        paddings=['VALID']* 3,
+        latent_obs_dim=None,
+        latent_hidden_fc_sizes=[],
+        fc_hidden_sizes=hidden_sizes
+    )
+
+    # f_theta = tensor_utils.compile_function(
+    #         [discrim_net.observation],
+    #         L.get_output(discrim_net.get_energy(observation, action))
+    # )
+
+    return discrim_net.get_reward(observation)
 
 def linear_net(x, dout=1):
     out = x

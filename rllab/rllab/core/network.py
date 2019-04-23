@@ -1,6 +1,7 @@
 
 
 import lasagne.layers as L
+import lasagne.layers.dnn as D
 import lasagne.nonlinearities as LN
 import lasagne.init as LI
 import theano.tensor as TT
@@ -287,7 +288,9 @@ class ConvNetwork(object):
 
         if len(input_shape) == 3:
             l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
-            l_hid = L.reshape(l_in, ([0],) + input_shape)
+            # print (([0],) + (input_shape[-1],) + input_shape[:-1])
+            l_hid = L.reshape(l_in, ([0],) + (input_shape[-1],) + input_shape[:-1])
+            # print (([0],) + input_shape)
         elif len(input_shape) == 2:
             l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
             input_shape = (1,) + input_shape
@@ -302,17 +305,18 @@ class ConvNetwork(object):
                 conv_strides,
                 conv_pads,
         ):
-            l_hid = L.Conv2DLayer(
+            print ('building layer:',idx)
+            l_hid = D.Conv2DDNNLayer(
                 l_hid,
                 num_filters=conv_filter,
                 filter_size=filter_size,
                 stride=(stride, stride),
                 pad=pad,
                 nonlinearity=hidden_nonlinearity,
-                name="%sconv_hidden_%d" % (prefix, idx),
-                convolution=wrapped_conv,
+                name="%sconv_hidden_%d" % (prefix, idx)
             )
         for idx, hidden_size in enumerate(hidden_sizes):
+            print ('building layer:',idx)
             l_hid = L.DenseLayer(
                 l_hid,
                 num_units=hidden_size,

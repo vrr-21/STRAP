@@ -4,7 +4,7 @@ from sandbox.rocky.tf.spaces.box import Box
 
 from inverse_rl.models.fusion_manager import RamFusionDistr
 from inverse_rl.models.imitation_learning import SingleTimestepIRL
-from inverse_rl.models.architectures import relu_net
+from inverse_rl.models.architectures import conv_net_state_only
 from inverse_rl.utils import TrainingIterator
 
 
@@ -21,12 +21,12 @@ class AIRL(SingleTimestepIRL):
     """
     def __init__(self, env,
                  expert_trajs=None,
-                 reward_arch=relu_net,
+                 reward_arch=conv_net_state_only,
                  reward_arch_args=None,
-                 value_fn_arch=relu_net,
+                 value_fn_arch=conv_net_state_only,
                  score_discrim=False,
                  discount=1.0,
-                 state_only=False,
+                 state_only=True,
                  max_itrs=100,
                  fusion=False,
                  name='airl'):
@@ -41,7 +41,7 @@ class AIRL(SingleTimestepIRL):
             self.fusion = None
         self.dO = env_spec.observation_space.flat_dim
         self.dU = env_spec.action_space.flat_dim
-        assert isinstance(env.action_space, Box)
+        # assert isinstance(env.action_space, Box)
         self.score_discrim = score_discrim
         self.gamma = discount
         assert value_fn_arch is not None
@@ -65,14 +65,15 @@ class AIRL(SingleTimestepIRL):
                 if not self.state_only:
                     rew_input = tf.concat([self.obs_t, self.act_t], axis=1)
                 with tf.variable_scope('reward'):
-                    self.reward = reward_arch(rew_input, dout=1, **reward_arch_args)
+                    # self.reward = reward_arch(rew_input, dout=1, **reward_arch_args)
+                    self.reward = reward_arch(env_spec, rew_input)
                     #energy_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs.name)
 
                 # value function shaping
                 with tf.variable_scope('vfn'):
-                    fitted_value_fn_n = value_fn_arch(self.nobs_t, dout=1)
+                    fitted_value_fn_n = value_fn_arch(env_spec, self.nobs_t)
                 with tf.variable_scope('vfn', reuse=True):
-                    self.value_fn = fitted_value_fn = value_fn_arch(self.obs_t, dout=1)
+                    self.value_fn = fitted_value_fn = value_fn_arch(env_spec, self.obs_t)
 
                 # Define log p_tau(a|s) = r + gamma * V(s') - V(s)
                 self.qfn = self.reward + self.gamma*fitted_value_fn_n

@@ -70,9 +70,9 @@ class GaussianConvRegressor(LasagnePowered):
 
         if optimizer is None:
             if use_trust_region:
-                optimizer = PenaltyLbfgsOptimizer("optimizer")
+                optimizer = PenaltyLbfgsOptimizer(15)
             else:
-                optimizer = LbfgsOptimizer("optimizer")
+                optimizer = LbfgsOptimizer(15)
 
         self._optimizer = optimizer
 

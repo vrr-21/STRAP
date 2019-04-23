@@ -3,7 +3,7 @@ sys.path.append('inverse_rl/')
 sys.path.append('rllab/')
 sys.path.append('inverse_rl/vizdoomgym')
 
-from utils import collect_data, train_AIRL, test_airl, test_dqn, InvalidArgumentError
+from utils import collect_data, train_AIRLState, train_AIRL, test_airl, test_dqn, InvalidArgumentError
 
 if __name__ == "__main__":
 
@@ -22,6 +22,8 @@ if __name__ == "__main__":
         collect_data(env)
     elif mode == 'irl':
         train_AIRL(env)
+    elif mode == 'irl_state':
+        train_AIRLState(env)
     elif mode == 'test':
         test_airl(env)
     elif mode == 'dqn':

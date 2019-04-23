@@ -102,11 +102,12 @@ ENV/
 # mypy
 .mypy_cache/
 
-# VS Code and model files
+# VS Code and model files and result files
 .vscode/
 models/irl
 models/dqn
 models/vanilla_dqn
+results/
 
 # CSV Files
 *.csv

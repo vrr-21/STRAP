@@ -8,6 +8,12 @@ from __future__ import print_function, division
 from builtins import range
 import cv2
 
+import sys
+sys.path.append('../')
+sys.path.append('../inverse_rl/')
+sys.path.append('../rllab/')
+sys.path.append('../tensorpack_models/')
+from utils import IRL
 
 # In[2]:
 
@@ -23,14 +29,15 @@ from gym import wrappers
 from datetime import datetime
 from scipy.misc import imresize
 import os
+import numpy as np
 os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
-
+from parameters import *
 
 # In[3]:
 
 
-IM_SIZE = 80
-IM_SIZE = 80
+IM_SIZE = 84
+IM_SIZE = 84
 
 
 # In[4]:
@@ -39,11 +46,23 @@ IM_SIZE = 80
 CUDA_VISIBLE_DEVICES=0 #Using Nvidia GPU:0
 TARGET_UPDATE_PERIOD = 100
 MAX_EXPERIENCES = 500000
-MIN_EXPERIENCES = 50
+MIN_EXPERIENCES = 500
 K = 6 #action space
 
-
-# In[5]:
+env_rewards_csv = []
+irl_rewards_csv = []
+ep_csv = []
+duration_csv = [] 
+num_steps_in_episode_csv = []
+epsilon_csv = []
+total_t_csv = []
+env_rewards_csv.append('Env Reward')
+irl_rewards_csv.append('IRL Reward')
+ep_csv.append('Epoch')
+duration_csv.append('Duration')
+num_steps_in_episode_csv.append('Num Steps in Episode')
+epsilon_csv.append('epsilon')
+total_t_csv.append('Total Training Duration')
 
 
 def downsample_image(A,IMG_SIZE,down_only=False,gray=True):
@@ -76,6 +95,7 @@ def downsample_image(A,IMG_SIZE,down_only=False,gray=True):
 
 # In[6]:
 
+
 config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
 tf.reset_default_graph()
 
@@ -85,8 +105,10 @@ new_saver.restore(sess_gan, tf.train.latest_checkpoint('./'))
 graph = tf.get_default_graph()
 op_to_restore = graph.get_tensor_by_name("Model/g_A/t1:0")
 ip1 = graph.get_tensor_by_name("input_A:0")
+
 # tf.logging.set_verbosity(tf.logging.ERROR)
 tf.reset_default_graph()
+irl = IRL(gym.make('Assault-v0'), 'Assault')
 # import IPython; IPython.embed()
 # In[7]:
 
@@ -132,18 +154,30 @@ class DQN:
 
             self.cost = cost
 
-    def copy_from(self, other):
+            self.update_ops = None
+
+    def copy_from(self):
+        assert self.update_ops!=None, "Set update ops"
+        self.session.run(self.update_ops)
+
+    def update_graph(self, other):
+        assert self.session != None
         mine = [t for t in tf.trainable_variables() if t.name.startswith(self.scope)]
         mine = sorted(mine, key= lambda x:x.name)
         theirs = [t for t in tf.trainable_variables() if t.name.startswith(other.scope)]
         theirs = sorted(theirs, key=lambda x:x.name)
 
+        # -----------------------------------
+        # TODO: Check if unnecessary assign ops are being added
+        # -----------------------------------
         ops = []
         for p, q in zip(mine, theirs):
-            actual = self.session.run(q)
-            op = p.assign(actual)
+            # actual = self.session.run(q)
+            op = p.assign(q)
             ops.append(op)
-        self.session.run(ops)
+        
+        return ops
+        # self.session.run(ops)
 
     def set_session(self, session):
         self.session = session
@@ -199,15 +233,18 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
     # import IPython; IPython.embed()
     new_obs = ((new_obs[0]+1)*127.5).astype(np.uint8)
     # new_obs = obs
-    obs_small = downsample_image(new_obs,80,down_only=True)
+    obs_small = downsample_image(new_obs,84,down_only=True)
+    # cv2.imwrite('test.jpg', obs_small)
+    # import IPython; IPython.embed();
     #always state is most recent 4 frames
     state = np.stack([obs_small]*4, axis =0)
-    assert(state.shape == (4, 80, 80))
+    assert(state.shape == (4, 84, 84))
     loss = None
 
     total_time_training = 0
     num_steps_in_episode = 1
     episode_reward = 0
+    episode_reward_env = 0
     #env = env.monitor.start('../neural_reinforcement_agents')
     done = False
     while not done:
@@ -215,22 +252,33 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
 
         if total_t % TARGET_UPDATE_PERIOD == 0:
             #periodically save the current learnings into a temp copy to bring extra stability
-            target_model.copy_from(model)
+            # target_model.copy_from(model)
+            target_model.copy_from()
 
         #also take actions to learn the game
         action = model.sample_action(state, epsilon)
 
         #find the reward
         obs, reward, done,_ = env.step(action)
-        obs_small = downsample_image(obs,80)
-
+        obs_small = downsample_image(obs,IMG_SIZE=256,gray=False)
+        feed_dict = {ip1:np.expand_dims(obs_small,axis=0)}
+        new_obs = sess_gan.run(op_to_restore,feed_dict)
+        # import IPython; IPython.embed()
+        new_obs = ((new_obs[0]+1)*127.5).astype(np.uint8)
+        # new_obs = obs
+        obs_small = downsample_image(new_obs,84,down_only=True)
         next_state = np.append(state[1:],  np.expand_dims(obs_small, axis = 0), axis = 0)
+
+        # import IPython; IPython.embed();
+        obs_irl = np.expand_dims(next_state.transpose((2, 1, 0)), axis=0)
+        reward_irl = irl.get_reward(obs_irl, action)
         state  = next_state
 
 
 
         total_t += 1
-        episode_reward += reward
+        episode_reward += reward_irl
+        episode_reward_env += reward
         num_steps_in_episode += num_steps_in_episode
 
 
@@ -238,7 +286,7 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
         if len(experience_replay_buffer)> MAX_EXPERIENCES:
             experience_replay_buffer.pop(0)
 
-        experience_replay_buffer.append((state, action, reward, next_state, done))
+        experience_replay_buffer.append((state, action, reward_irl, next_state, done))
 
         #train the model
         t0_2 = datetime.now()
@@ -252,14 +300,15 @@ def play_one(env, total_t, experience_replay_buffer, model, target_model, gamma,
         #updating the epsilon value
         epsilon = max(epsilon- epsilon_change, epsilon_min)
 
-    return total_t, episode_reward, (datetime.now() - t0), num_steps_in_episode, epsilon
+
+    return total_t, episode_reward, episode_reward_env, (datetime.now() - t0), num_steps_in_episode, epsilon
 
 
 # In[10]:
 
 
 def update_state(state, obs):
-    obs_small = downsample_image(obs,80)
+    # obs_small = downsample_image(obs,84)
     return np.append(state[1:], np.expand_dims(obs_small, 0), axis=0)
 
 
@@ -272,7 +321,7 @@ if __name__ == '__main__':
     hidden_layer_sizes = [512]
     gamma = 0.99
     batch_size = 32
-    num_episodes= 10
+    num_episodes= NUM_EPISODES
     total_t = 0
     experience_replay_buffer = []
     episode_rewards = np.zeros(num_episodes)
@@ -289,66 +338,90 @@ if __name__ == '__main__':
 
     #Creat models
     model = DQN(K= K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "model")
-
     target_model = DQN(K=K, conv_layer_sizes = conv_layer_sizes, hidden_layer_sizes = hidden_layer_sizes, gamma= gamma, scope = "target_model")
-
-
+    saver = tf.train.Saver()
     # feed_dict ={ip1:np.expand_dims(img, axis=0)}
-
-
     # sess_reward = tf.InteractiveSession()
+    try:
+        with tf.Session(config=config) as sess:
 
-    with tf.Session(config=config) as sess:
+            #Trying to fill in the experience buffer not learning anything!
+            model.set_session(sess)
+            target_model.set_session(sess)
+            target_model.update_ops = target_model.update_graph(model)
 
-        #Trying to fill in the experience buffer not learning anything!
-        model.set_session(sess)
-        target_model.set_session(sess)
+            sess.run(tf.global_variables_initializer())
 
-        sess.run(tf.global_variables_initializer())
-
-        obs = env.reset()
-        obs_small = downsample_image(obs,80)
-
-        state = np.stack([obs_small]*4, axis =0)
-
-        for i in range(MIN_EXPERIENCES):
-            action = np.random.choice(K)
-            print('Experience: ', i)
-
-            obs, reward, done,_ = env.step(action)
+            obs = env.reset()
+            obs = downsample_image(obs,IMG_SIZE=256,gray=False)
             feed_dict ={ip1:np.expand_dims(obs, axis=0)}
-            # env.render()
-            next_state = update_state(state, obs)
+            new_obs = sess_gan.run(op_to_restore,feed_dict)
+            # import IPython; IPython.embed()
+            new_obs = ((new_obs[0]+1)*127.5).astype(np.uint8)
+            # new_obs = obs
+            obs_small = downsample_image(new_obs,84,down_only=True)
 
-            experience_replay_buffer.append((state, action, reward, next_state, done))
+            state = np.stack([obs_small]*4, axis =0)
 
-            if done:
-                obs = env.reset()
-                obs_small = downsample_image(obs,80)
-                state = np.stack([obs_small]*4, axis =0)
+            for i in range(MIN_EXPERIENCES):
+                action = np.random.choice(K)
+                print('Experience: ', i, end='\r')
 
-            else:
-                state = next_state
+                obs, reward, done,_ = env.step(action)
+                obs = downsample_image(obs,IMG_SIZE=256,gray=False)
+                feed_dict ={ip1:np.expand_dims(obs, axis=0)}
+                new_obs = sess_gan.run(op_to_restore,feed_dict)
+                # import IPython; IPython.embed()
+                new_obs = ((new_obs[0]+1)*127.5).astype(np.uint8)
+                # new_obs = obs
+                obs_small = downsample_image(new_obs,84,down_only=True)
+
+                # env.render()
+                next_state = update_state(state, obs_small)
+                obs_irl = np.expand_dims(next_state.transpose((2, 1, 0)), axis=0)
+                # import IPython; IPython.embed();
+                reward_irl = irl.get_reward(obs_irl, action)
+
+                experience_replay_buffer.append((state, action, reward, next_state, done))
+
+                if done:
+                    obs = env.reset()
+                    obs_small = downsample_image(obs,84)
+                    state = np.stack([obs_small]*4, axis =0)
+
+                else:
+                    state = next_state
 
 
-        #Now play episodes and learning starts from here!!
-        env = gym.envs.make("DemonAttack-v0")
-        env = wrappers.Monitor(env, './', force= True)
-        for i in range(num_episodes):
+            #Now play episodes and learning starts from here!!
+            env = gym.envs.make("DemonAttack-v0")
+            # env = wrappers.Monitor(env, './', force= True)
+            
+            for i in range(num_episodes):
 
-            total_t, episode_reward, duration, num_steps_in_episode, epsilon = play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min)
-            episode_rewards[i] = episode_reward
-
-            print("Episode:", i, " Duration:", duration, " Reward:", episode_reward)
-
-            sys.stdout.flush()
-    sess_gan.close()
-
-
-# In[ ]:
-
-
+                total_t, episode_reward, episode_reward_env, duration, num_steps_in_episode, epsilon = play_one(env, total_t, experience_replay_buffer, model, target_model, gamma, batch_size , epsilon, epsilon_change, epsilon_min)
+                episode_rewards[i] = episode_reward
+                env_rewards_csv.append(episode_reward_env)
+                irl_rewards_csv.append(episode_reward)
+                ep_csv.append(i)
+                total_t_csv.append(total_t)
+                duration_csv.append(duration)
+                #num_steps_in_episode_csv.append(num_steps_in_episode)
+                #epsilon_csv.append(epsilon)
 
 
+                print("Episode:", i, " Duration:", duration, " Reward:", episode_reward, 'Env reward:', episode_reward_env)
+                if i % CHECKPOINT_DURATION == 0:
+                    saver.save(sess, '../models/dqn/DemonAttack/model', global_step=i)
+                    print ('--------------- Model saved afer %d episodes ---------------' % (i + 1))
 
-# In[ ]:
+                sys.stdout.flush()
+
+            saver.save(sess, '../models/dqn/DemonAttack/model', global_step=NUM_EPISODES)
+            print ('--------------- Model saved afer %d episodes ---------------' % NUM_EPISODES)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        np.savetxt('info.csv', [p for p in zip(ep_csv,env_rewards_csv,irl_rewards_csv, total_t_csv, duration_csv)], delimiter=',', fmt='%s')
+        sess_gan.close()
+        irl.reward_sess.close()
