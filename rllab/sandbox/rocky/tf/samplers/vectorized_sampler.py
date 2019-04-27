@@ -3,6 +3,7 @@ sys.path.append('../../')
 from parameters import IMG_SIZE, STACK_SIZE
 
 import pickle
+import cv2
 
 import tensorflow as tf
 from rllab.sampler.base import BaseSampler
@@ -71,7 +72,7 @@ class VectorizedSampler(BaseSampler):
     def obtain_samples(self, itr):
         logger.log("Obtaining samples for iteration %d..." % itr)
         n_samples = 0
-        obses = self.vec_downsample(self.vec_env.reset())
+        obses = self.vec_downsample(self.vec_env.reset(),IMG_SIZE)
         paths, obses = [], np.stack([obses] * STACK_SIZE, axis=3)
         dones = np.asarray([True] * self.vec_env.num_envs)
         running_paths = [None] * self.vec_env.num_envs
@@ -92,7 +93,7 @@ class VectorizedSampler(BaseSampler):
             policy_time += time.time() - t
             t = time.time()
             next_obses, rewards, dones, env_infos = self.vec_env.step(actions)
-            next_obses = self.vec_downsample(next_obses)
+            next_obses = self.vec_downsample(next_obses, IMG_SIZE)
             next_obses = np.append(obses[:,:,:,1:], np.expand_dims(next_obses, 3), axis=3)
             # import IPython; IPython.embed();
             env_time += time.time() - t

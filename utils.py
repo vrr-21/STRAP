@@ -92,8 +92,8 @@ class IRL:
         self.reward_sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
 
         if is_state_action:    
-            saver = tf.train.import_meta_graph('../STRAP/models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
-            saver.restore(self.reward_sess, tf.train.latest_checkpoint('../STRAP/models/irl/%s/' % (self._env_name)))
+            saver = tf.train.import_meta_graph('/home/vrr-21/CS599/project/STRAP/models/irl/%s/model_%s.meta' % (self._env_name, self._env_name))
+            saver.restore(self.reward_sess, tf.train.latest_checkpoint('/home/vrr-21/CS599/project/STRAP/models/irl/%s/' % (self._env_name)))
 
             # Get references to required tensors - Observation, action placeholders and energy operation
             operations = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
@@ -101,8 +101,8 @@ class IRL:
             self.__action = [t for t in operations if t.name == 'gcl/act:0'][0]
             self.__reward_op = [t for t in operations if t.name == 'gcl/discrim/reward_fn:0'][0]
         else:
-            saver = tf.train.import_meta_graph('../STRAP/models/irl_state/%s/model_%s.meta' % (self._env_name, self._env_name))
-            saver.restore(self.reward_sess, tf.train.latest_checkpoint('../STRAP/models/irl_state/%s/' % (self._env_name)))
+            saver = tf.train.import_meta_graph('/home/vrr-21/CS599/project/STRAP/models/irl_state/%s/model_%s.meta' % (self._env_name, self._env_name))
+            saver.restore(self.reward_sess, tf.train.latest_checkpoint('/home/vrr-21/CS599/project/STRAP/models/irl_state/%s/' % (self._env_name)))
 
             # Get references to required operations - Observationplaceholders and reward operation
             operations = [t for op in tf.get_default_graph().get_operations() for t in op.values()]
@@ -201,11 +201,11 @@ def train_AIRL(env_name):
         policy=policy,
         irl_model=irl_model,
         n_itr=N_ITERATIONS,
-        batch_size=50,
-        max_path_length=500,
+        batch_size=500,
+        max_path_length=250,
         discount=0.98,
         store_paths=True,
-        discrim_train_itrs=1,
+        discrim_train_itrs=25,
         irl_model_wt=1.0,
         start_itr=START_ITR,
         entropy_weight=0.1, # this should be 1.0 but 0.1 seems to work better

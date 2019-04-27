@@ -1,4 +1,5 @@
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
+from parameters import STACK_SIZE
 import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.core.network import ConvNetwork
 from rllab.core.serializable import Serializable
