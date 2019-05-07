@@ -14,11 +14,20 @@ def update_state(state, obs):
 TRAJECTORY_LENGTH = 20000
 N_TRAJECTORIES = 20
 
-env = gym.make('VizdoomTakeCover-v0')
+try:
+    env_name = sys.argv[1]
+except:
+    env_name = "VizdoomTakeCover-v0"
+
+env = gym.make(env_name)
 
 env = DummyVecEnv([lambda: env])
+try:
+    model_path = sys.argv[2]
+except:
+    model_path = "models/ppo_VizdoomTakeCover-v0"
 
-model = PPO2.load("models/ppo_vizdoom_takecover-colab")
+model = PPO2.load(model_path)
 
 experience = Experience(num_actions = env.action_space.n, trajectory_length= TRAJECTORY_LENGTH, n_trajectories= N_TRAJECTORIES)
 
