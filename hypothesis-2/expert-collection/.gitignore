@@ -1,0 +1,6 @@
+_vizdoom/
+
+data/
+models/
+*.tar.gz
+*.ini

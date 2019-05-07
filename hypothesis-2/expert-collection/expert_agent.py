@@ -1,6 +1,7 @@
 import gym
 import vizdoomgym
 import numpy as np
+import sys
 
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.vec_env import DummyVecEnv
@@ -14,18 +15,18 @@ def update_state(state, obs):
 TRAJECTORY_LENGTH = 20000
 N_TRAJECTORIES = 20
 
+env_name = "VizdoomTakeCover-v0"
+num_eps = 10
+model_path = "models/ppo_VizdoomTakeCover-v0"
 try:
     env_name = sys.argv[1]
+    model_path = sys.argv[2]
+    num_eps = int(sys.argv[3])
 except:
-    env_name = "VizdoomTakeCover-v0"
+    pass
 
 env = gym.make(env_name)
-
 env = DummyVecEnv([lambda: env])
-try:
-    model_path = sys.argv[2]
-except:
-    model_path = "models/ppo_VizdoomTakeCover-v0"
 
 model = PPO2.load(model_path)
 
@@ -34,7 +35,7 @@ experience = Experience(num_actions = env.action_space.n, trajectory_length= TRA
 obs = env.reset()
 episode_rewards = [0.0]
 current_ep = 1
-num_eps = 10
+env_name_stripped = env_name.split("-")[0]
 state = np.stack([obs[0]]*4, axis=2)
 
 while current_ep <= num_eps:
@@ -45,7 +46,7 @@ while current_ep <= num_eps:
     episode_rewards[-1] += rewards[0]
     if not experience.append(state, action, rewards[0]):
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizdoomTakeCover', file_name='itr_'+str(current_ep - 1))
+        experience.save(env_name = env_name_stripped, file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
@@ -53,7 +54,7 @@ while current_ep <= num_eps:
         continue
     if dones[0]:
         print("Episode {} reward: {}".format(current_ep, episode_rewards[-1]))
-        experience.save(env_name = 'VizdoomTakeCover', file_name='itr_'+str(current_ep - 1))
+        experience.save(env_name = env_name_stripped, file_name='itr_'+str(current_ep - 1))
         episode_rewards.append(0.0)
         current_ep += 1
         obs = env.reset()
