@@ -1,1 +1,4 @@
+numpy
+gym
+tensorflow
 stable-baselines==2.5.1
