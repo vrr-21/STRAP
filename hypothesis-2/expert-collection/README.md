@@ -18,6 +18,8 @@ Install via pip:
 - vizdoomgym
 - stable-baselines
 
+Out of these, all except vizdoomgym can be installed from the  `requirements.txt` here. For installing vizdoomgym, follow [this](https://github.com/shakenes/vizdoomgym#installation).
+
 Install via apt-get:
 - cmake
 - libboost-all-dev
